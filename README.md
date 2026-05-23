@@ -2,21 +2,21 @@
 
 This is the professional, production-oriented backend API foundation for **Compound OS**, a modern residential compound management system.
 
-## Tech Stack
-- **Node.js** & **Express.js** (modular monolith architecture)
-- **TypeScript** (strict types, ES2022 output, NodeNext module resolution)
-- **PostgreSQL** & **Prisma ORM** (Prisma-first schema)
-- **Zod** (environment & payload validation)
+---
+
+## Deployment & Hosting Strategy
+To ensure maximum scalability, performance, and modern continuous integration:
+- **Backend Service**: Hosted on **Render** (Web Service).
+- **Database Layer**: Hosted on **Supabase** (Serverless PostgreSQL Database).
+- **Frontend Layer (Later)**: Hosted on **Vercel** (Static/Serverless SPA or Next.js app).
 
 ---
 
-## Architectural Guidelines
-1. **Feature-based Modules**: Domain concerns are isolated under `src/modules/`.
-2. **Thin Controllers**: Controllers handle only incoming request parsing/validation and format response JSON.
-3. **Services Layer**: Business logic resides within domain service layers.
-4. **Routes Isolation**: Routes only map HTTP endpoints and attach appropriate middlewares.
-5. **No Direct Prisma Calls**: Database communication is strictly restricted to services.
-6. **Strict Typing**: Strict TypeScript configurations to ensure complete type safety.
+## Tech Stack
+- **Node.js** & **Express.js** (modular monolith architecture)
+- **TypeScript** (strict types, ES2022 output, NodeNext module resolution)
+- **Supabase PostgreSQL** & **Prisma ORM** (Prisma-first schema)
+- **Zod** (environment & payload validation)
 
 ---
 
@@ -39,6 +39,7 @@ compound-os-api/
   │   │   └── types/            # Global Express Request expansions
   │   ├── modules/              # Domain-specific modules (compounds, units, residents, complaints)
   │   └── routes/               # Modular Express API root routes
+  ├── .env
   ├── .env.example
   ├── .gitignore
   ├── package.json
@@ -48,12 +49,9 @@ compound-os-api/
 
 ---
 
-## Setup & Running Instructions
-
-Follow these exact steps to set up and run the Compound OS API backend foundation locally:
+## Local Setup & Development Instructions
 
 ### 1. Install Dependencies
-Navigate into the `compound-os-api` directory and run:
 ```bash
 npm install
 ```
@@ -65,34 +63,62 @@ copy .env.example .env
 ```
 *(On Unix/macOS systems, use `cp .env.example .env`)*
 
-Open the `.env` file and configure your `DATABASE_URL` with your local PostgreSQL credentials:
-```env
-DATABASE_URL="postgresql://postgres:YOUR_PASSWORD@localhost:5432/compound_os?schema=public"
-```
+Open the `.env` file and configure your `DATABASE_URL` using the connection strings copied from your **Supabase Dashboard > Connect** panel.
 
-### 3. Validate database schema
-Check the Prisma schema file for syntactical correctness:
-```bash
-npx prisma validate
-```
+---
 
-### 4. Generate Prisma Client
-Generate the type-safe Prisma client:
-```bash
-npm run prisma:generate
-```
+## Supabase Connection Guidelines
+To avoid common connection limits or pooler conflicts, copy the exact Prisma-compatible connection strings directly from your **Supabase Dashboard > Connect** panel and apply these rules:
 
-### 5. Run Database Migrations
-Create and execute the initial schema migration against your PostgreSQL instance:
-```bash
-npm run prisma:migrate -- --name init
-```
+### 1. Local Migrations (`prisma migrate dev`)
+* Use a direct database connection or a **Supavisor Session Mode** connection string that fully supports DDL migration operations.
+* **Network compatibility**: Supabase direct database connections require **IPv6** support in your local network. If your network does not support IPv6, use the **Supavisor Session Mode** connection (port `5432` or pooler connection without transactional properties) or configure the paid Supabase IPv4 add-on.
 
-### 6. Start the Development Server
-Launch the server in hot-reload mode:
+### 2. Production Deployments (`prisma migrate deploy` on Render)
+* Set a connection string during the automated build pipeline that supports running Prisma DDL migrations.
+
+### 3. Serverless Runtime (`npm run start` / `npm run dev`)
+* Set your runtime database url to the Prisma/server runtime connection string recommended in the Supabase Connect panel (which leverages connection poolers to prevent exhaustion of connection slots).
+
+---
+
+## First Database Migration (Supabase)
+To establish database schemas on Supabase:
+1. Temporarily set your `.env` file's `DATABASE_URL` to your migration-compatible connection string.
+2. Run the Prisma migration CLI:
+   ```bash
+   npm run prisma:migrate -- --name init
+   ```
+3. Once the migration has completed, revert your `.env` `DATABASE_URL` to the pooler/server runtime connection string.
+
+### Start the Development Server
+Launch the local server with hot-reloads enabled:
 ```bash
 npm run dev
 ```
+
+---
+
+## Render Deployment Instructions
+
+When deploying the **Compound OS API** backend to Render as a Web Service:
+
+### 1. Connect Github Repository
+Log into Render and create a new **Web Service**, connecting the Github repository where the project resides.
+
+### 2. Configure Build & Start Commands
+Under the **Settings** panel, configure the build and run pipelines:
+- **Runtime**: `Node`
+- **Build Command**: `npm install && npm run build && npm run prisma:deploy`
+- **Start Command**: `npm run start`
+
+*(The build command will download packages, generate Prisma typings, build TypeScript files into `dist/`, and run `prisma migrate deploy` to safely apply pending database migrations automatically).*
+
+### 3. Setup Environment Variables
+Under the **Environment** tab, add the following variables:
+- `NODE_ENV`: `production`
+- `PORT`: `10000` (Render allocates ports automatically, but setting this aligns validations)
+- `DATABASE_URL`: Set this to the Supabase connection string recommended for **Prisma/server runtime** from the Supabase Connect panel.
 
 ---
 
@@ -102,7 +128,7 @@ The health check endpoint is the only functional endpoint in this foundation.
 
 ### Test Health Endpoint
 Send a `GET` request to:
-`http://localhost:4000/api/v1/health`
+`http://localhost:4000/api/v1/health` (or your Render Web Service URL)
 
 #### Expected Success Response:
 ```json
@@ -112,15 +138,7 @@ Send a `GET` request to:
   "data": {
     "service": "compound-os-api",
     "environment": "development",
-    "timestamp": "2026-05-23T13:00:00.000Z"
+    "timestamp": "ISO_TIMESTAMP"
   }
 }
 ```
-
----
-
-## Current Scope Limits
-To keep the initial foundation small, clean, and stable:
-- **No authentication** or password hashing has been added (to be implemented later).
-- **No CRUD endpoints** have been implemented yet.
-- Modules for `compounds`, `units`, `residents`, and `complaints` export clean, empty route configurations.
