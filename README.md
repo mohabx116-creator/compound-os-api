@@ -303,3 +303,60 @@ DELETE /api/v1/residents/{id}
 ```
 
 Deletes a resident only when there are no related complaints. Returns `409` if deleting the resident would remove complaint history.
+
+---
+
+## Complaints API
+
+Base path: `/api/v1/complaints`
+
+### List Complaints
+```http
+GET /api/v1/complaints?page=1&limit=10&search=leakage&compoundId={compoundId}&residentId={residentId}&unitId={unitId}&status=OPEN&priority=HIGH
+```
+
+Returns a paginated list of complaints with basic compound, resident, and unit information.
+
+### Get Complaint
+```http
+GET /api/v1/complaints/{id}
+```
+
+Returns one complaint by UUID with basic compound, resident, and unit information.
+
+### Create Complaint
+```http
+POST /api/v1/complaints
+Content-Type: application/json
+
+{
+  "compoundId": "ca155709-2f8c-47ab-8e91-6fa0504cf435",
+  "residentId": "1b0e1f72-2d0c-4a2d-bd47-1a125bfe5a6c",
+  "unitId": "f863d57c-e951-4a4d-bced-ce2bc2647d13",
+  "title": "Water leakage in bathroom",
+  "description": "There is a water leakage issue that needs maintenance follow-up.",
+  "priority": "HIGH",
+  "status": "OPEN"
+}
+```
+
+Returns `404` if the compound, resident, or unit does not exist, and `409` if the resident or unit belongs to another compound.
+
+### Update Complaint
+```http
+PATCH /api/v1/complaints/{id}
+Content-Type: application/json
+
+{
+  "status": "IN_PROGRESS"
+}
+```
+
+Use `"unitId": null` to unlink a complaint from a unit.
+
+### Close Complaint
+```http
+DELETE /api/v1/complaints/{id}
+```
+
+Closes the complaint using `status=CLOSED` instead of hard deleting historical complaint data. Repeating delete for an already closed complaint returns `200` with a clear message.
