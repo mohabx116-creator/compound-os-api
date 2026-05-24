@@ -72,7 +72,7 @@ To avoid common connection limits or pooler conflicts, copy the exact Prisma-com
 
 ### 1. Local Migrations (`prisma migrate dev`)
 * Use a direct database connection or a **Supavisor Session Mode** connection string that fully supports DDL migration operations.
-* **Network compatibility**: Supabase direct database connections require **IPv6** support in your local network. If your network does not support IPv6, use the **Supavisor Session Mode** connection (port `5432` or pooler connection without transactional properties) or configure the paid Supabase IPv4 add-on.
+* **Network compatibility**: Supabase direct database connections may require IPv6 support depending on your project and network. If direct connection fails, use **Supavisor Session Mode** or the migration-compatible connection option recommended in your Supabase Dashboard.
 
 ### 2. Production Deployments (`prisma migrate deploy` on Render)
 * Set a connection string during the automated build pipeline that supports running Prisma DDL migrations.
