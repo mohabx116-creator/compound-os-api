@@ -192,3 +192,57 @@ DELETE /api/v1/compounds/{id}
 ```
 
 The delete endpoint safely deactivates a compound using `isActive=false`. It returns `409` if the compound has related units, residents, or complaints. Repeating delete for an already inactive compound returns `200` with a clear "already inactive" message.
+
+---
+
+## Units API
+
+Base path: `/api/v1/units`
+
+### List Units
+```http
+GET /api/v1/units?page=1&limit=10&search=A&compoundId={compoundId}&status=VACANT&unitType=APARTMENT
+```
+
+Returns a paginated list of units with basic compound information.
+
+### Get Unit
+```http
+GET /api/v1/units/{id}
+```
+
+Returns one unit by UUID with basic compound information and related counts for residents and complaints.
+
+### Create Unit
+```http
+POST /api/v1/units
+Content-Type: application/json
+
+{
+  "compoundId": "ca155709-2f8c-47ab-8e91-6fa0504cf435",
+  "unitNumber": "A-101",
+  "unitType": "APARTMENT",
+  "floor": 1,
+  "areaSqm": 120.5,
+  "status": "VACANT"
+}
+```
+
+Returns `404` if the compound does not exist and `409` if the unit number already exists in the same compound.
+
+### Update Unit
+```http
+PATCH /api/v1/units/{id}
+Content-Type: application/json
+
+{
+  "status": "MAINTENANCE"
+}
+```
+
+### Delete Unit
+```http
+DELETE /api/v1/units/{id}
+```
+
+Deletes a unit only when it has no related residents or complaints. Returns `409` if deleting the unit would remove linked business data.
