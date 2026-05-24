@@ -246,3 +246,60 @@ DELETE /api/v1/units/{id}
 ```
 
 Deletes a unit only when it has no related residents or complaints. Returns `409` if deleting the unit would remove linked business data.
+
+---
+
+## Residents API
+
+Base path: `/api/v1/residents`
+
+### List Residents
+```http
+GET /api/v1/residents?page=1&limit=10&search=Ahmed&compoundId={compoundId}&unitId={unitId}&status=ACTIVE&role=RESIDENT
+```
+
+Returns a paginated list of residents with basic compound and unit information. Password hashes are never returned.
+
+### Get Resident
+```http
+GET /api/v1/residents/{id}
+```
+
+Returns one resident by UUID with basic compound and unit information plus a complaints count.
+
+### Create Resident
+```http
+POST /api/v1/residents
+Content-Type: application/json
+
+{
+  "compoundId": "ca155709-2f8c-47ab-8e91-6fa0504cf435",
+  "unitId": "f863d57c-e951-4a4d-bced-ce2bc2647d13",
+  "fullName": "Ahmed Test Resident",
+  "phone": "+201222222222",
+  "email": "resident.test@compoundos.com",
+  "role": "RESIDENT",
+  "status": "ACTIVE"
+}
+```
+
+Returns `404` if the compound or unit does not exist, `409` if the unit belongs to another compound, and `409` if the phone already exists in the same compound.
+
+### Update Resident
+```http
+PATCH /api/v1/residents/{id}
+Content-Type: application/json
+
+{
+  "status": "INACTIVE"
+}
+```
+
+Use `"unitId": null` to unlink a resident from a unit and `"email": null` to clear an email.
+
+### Delete Resident
+```http
+DELETE /api/v1/residents/{id}
+```
+
+Deletes a resident only when there are no related complaints. Returns `409` if deleting the resident would remove complaint history.
