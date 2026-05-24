@@ -142,3 +142,53 @@ Send a `GET` request to:
   }
 }
 ```
+
+---
+
+## Compounds API
+
+Base path: `/api/v1/compounds`
+
+### List Compounds
+```http
+GET /api/v1/compounds?page=1&limit=10&search=demo&isActive=true
+```
+
+Returns a paginated list of active compounds by default. Pass `isActive=false` to list inactive compounds.
+
+### Get Compound
+```http
+GET /api/v1/compounds/{id}
+```
+
+Returns one compound by UUID with related counts for units, residents, and complaints, or `404` when it does not exist.
+
+### Create Compound
+```http
+POST /api/v1/compounds
+Content-Type: application/json
+
+{
+  "name": "Demo Compound",
+  "adminEmail": "admin@example.com",
+  "address": "Cairo",
+  "phone": "01000000000"
+}
+```
+
+### Update Compound
+```http
+PATCH /api/v1/compounds/{id}
+Content-Type: application/json
+
+{
+  "name": "Updated Compound"
+}
+```
+
+### Delete Compound
+```http
+DELETE /api/v1/compounds/{id}
+```
+
+The delete endpoint safely deactivates a compound using `isActive=false`. It returns `409` if the compound has related units, residents, or complaints. Repeating delete for an already inactive compound returns `200` with a clear "already inactive" message.

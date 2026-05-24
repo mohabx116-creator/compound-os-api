@@ -1,7 +1,43 @@
 import { Router } from 'express';
+import { validate } from '../../common/middlewares/validate.middleware.js';
+import { CompoundController } from './compound.controller.js';
+import {
+  compoundParamsSchema,
+  compoundQuerySchema,
+  createCompoundSchema,
+  updateCompoundSchema,
+} from './compound.schema.js';
 
 const router = Router();
 
-// TODO: Define Compound routes here when CRUD operations are added
+router.get(
+  '/',
+  validate({ query: compoundQuerySchema }),
+  CompoundController.listCompounds,
+);
+
+router.get(
+  '/:id',
+  validate({ params: compoundParamsSchema }),
+  CompoundController.getCompoundById,
+);
+
+router.post(
+  '/',
+  validate({ body: createCompoundSchema }),
+  CompoundController.createCompound,
+);
+
+router.patch(
+  '/:id',
+  validate({ params: compoundParamsSchema, body: updateCompoundSchema }),
+  CompoundController.updateCompound,
+);
+
+router.delete(
+  '/:id',
+  validate({ params: compoundParamsSchema }),
+  CompoundController.deleteCompound,
+);
 
 export const compoundRoutes = router;

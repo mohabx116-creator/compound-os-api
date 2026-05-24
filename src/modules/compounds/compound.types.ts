@@ -1,1 +1,28 @@
-// TODO: Define Compound domain interfaces and types here
+export interface CreateCompoundInput {
+  name: string;
+  adminEmail: string;
+  address?: string;
+  logoUrl?: string;
+  phone?: string;
+  isActive?: boolean;
+}
+
+export interface UpdateCompoundInput {
+  name?: string;
+  adminEmail?: string;
+  address?: string;
+  logoUrl?: string;
+  phone?: string;
+  isActive?: boolean;
+}
+
+export interface CompoundQuery {
+  page: number;
+  limit: number;
+  search?: string;
+  isActive?: boolean;
+}
+
+export interface CompoundParams {
+  id: string;
+}
