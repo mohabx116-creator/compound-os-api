@@ -17,6 +17,7 @@ To ensure maximum scalability, performance, and modern continuous integration:
 - **TypeScript** (strict types, ES2022 output, NodeNext module resolution)
 - **Supabase PostgreSQL** & **Prisma ORM** (Prisma-first schema)
 - **Zod** (environment & payload validation)
+- **bcrypt** (password hashing utilities prepared for the auth phase)
 
 ---
 
@@ -64,6 +65,16 @@ copy .env.example .env
 *(On Unix/macOS systems, use `cp .env.example .env`)*
 
 Open the `.env` file and configure your `DATABASE_URL` using the connection strings copied from your **Supabase Dashboard > Connect** panel.
+
+Phase A1 auth foundation also defines these variables:
+
+```bash
+PASSWORD_SALT_ROUNDS=12
+JWT_SECRET="CHANGE_ME_IN_PHASE_A2"
+JWT_EXPIRES_IN="7d"
+```
+
+`JWT_SECRET` is a placeholder for the next phase and is optional in Phase A1. Do not use the placeholder value in production.
 
 ---
 
@@ -126,6 +137,35 @@ Under the **Environment** tab, add the following variables:
 
 The health check endpoint is the only functional endpoint in this foundation.
 
+## Auth Foundation Status
+
+Phase A1 prepares authentication data fields, password hashing utilities, role helpers, and a dormant auth module.
+
+Current auth status:
+- No login endpoint is implemented yet.
+- No JWT is issued yet.
+- Existing CRUD routes are not protected yet.
+- Frontend apps still use their current mock sessions.
+
+Auth module readiness can be checked with:
+
+```http
+GET /api/v1/auth/status
+```
+
+Expected response:
+
+```json
+{
+  "success": true,
+  "message": "Auth module is ready",
+  "data": {
+    "authEnabled": false,
+    "phase": "foundation"
+  }
+}
+```
+
 ### Test Health Endpoint
 Send a `GET` request to:
 `http://localhost:4000/api/v1/health` (or your Render Web Service URL)
@@ -149,6 +189,33 @@ Send a `GET` request to:
 
 Base path: `/api/v1/compounds`
 
+### Tenant Code Foundation
+
+Phase A1B adds an optional compound `code` field as a technical tenant slug.
+
+Rules:
+- `code` is optional in A1B so existing live compounds are not forced to change immediately.
+- `code` must be slug-safe when provided: lowercase letters, numbers, and hyphens only.
+- Examples: `black-horse`, `compound-os-demo`.
+- `code` is unique across compounds.
+- Resident phone numbers remain unique per compound, not globally unique.
+
+Future resident login UX:
+- The resident will select/tap a compound logo or compound button in the app.
+- The frontend will send the selected compound's `compoundCode` internally.
+- The resident will only type phone and password.
+- Future login payload shape will use hidden tenant context:
+
+```json
+{
+  "compoundCode": "black-horse",
+  "phone": "+201222222222",
+  "password": "..."
+}
+```
+
+A1B does not implement login, JWT issuing, protected routes, or frontend integration. Production should restrict changing `code` after real users depend on it.
+
 ### List Compounds
 ```http
 GET /api/v1/compounds?page=1&limit=10&search=demo&isActive=true
@@ -170,6 +237,7 @@ Content-Type: application/json
 
 {
   "name": "Demo Compound",
+  "code": "compound-os-demo",
   "adminEmail": "admin@example.com",
   "address": "Cairo",
   "phone": "01000000000"

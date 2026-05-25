@@ -6,8 +6,29 @@ const optionalText = (maxLength: number) =>
     z.string().trim().max(maxLength).optional(),
   );
 
+const optionalCompoundCode = z.preprocess(
+  (value) => {
+    if (typeof value !== 'string') {
+      return value;
+    }
+
+    const normalized = value.trim().toLowerCase();
+    return normalized === '' ? undefined : normalized;
+  },
+  z
+    .string()
+    .min(3, 'Compound code must be at least 3 characters')
+    .max(50, 'Compound code must be at most 50 characters')
+    .regex(
+      /^[a-z0-9-]+$/,
+      'Compound code may only contain lowercase letters, numbers, and hyphens',
+    )
+    .optional(),
+);
+
 const compoundPayloadFields = {
   name: z.string().trim().min(1, 'Compound name is required').max(120),
+  code: optionalCompoundCode,
   adminEmail: z.string().trim().email('Invalid admin email').max(255),
   address: optionalText(500),
   logoUrl: z.preprocess(
@@ -23,6 +44,7 @@ export const createCompoundSchema = z.object(compoundPayloadFields).strict();
 export const updateCompoundSchema = z
   .object({
     name: compoundPayloadFields.name.optional(),
+    code: compoundPayloadFields.code,
     adminEmail: compoundPayloadFields.adminEmail.optional(),
     address: compoundPayloadFields.address,
     logoUrl: compoundPayloadFields.logoUrl,

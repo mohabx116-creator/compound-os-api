@@ -66,18 +66,28 @@ export class CompoundService {
   }
 
   static async createCompound(data: CreateCompoundInput) {
-    return prisma.compound.create({
-      data,
-    });
+    try {
+      return await prisma.compound.create({
+        data: this.normalizeCompoundData(data),
+      });
+    } catch (error) {
+      this.handleUniqueConstraint(error);
+      throw error;
+    }
   }
 
   static async updateCompound(id: string, data: UpdateCompoundInput) {
     await this.getCompoundById(id);
 
-    return prisma.compound.update({
-      where: { id },
-      data,
-    });
+    try {
+      return await prisma.compound.update({
+        where: { id },
+        data: this.normalizeCompoundData(data),
+      });
+    } catch (error) {
+      this.handleUniqueConstraint(error);
+      throw error;
+    }
   }
 
   static async deleteCompound(id: string) {
@@ -115,5 +125,35 @@ export class CompoundService {
       compound: deactivatedCompound,
       alreadyInactive: false,
     };
+  }
+
+  private static normalizeCompoundData<T extends CreateCompoundInput | UpdateCompoundInput>(
+    data: T,
+  ): T {
+    if (data.code === undefined) {
+      return data;
+    }
+
+    return {
+      ...data,
+      code: data.code.trim().toLowerCase(),
+    };
+  }
+
+  private static handleUniqueConstraint(error: unknown) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    ) {
+      const target = Array.isArray(error.meta?.target) ? error.meta.target : [];
+
+      if (target.includes('code')) {
+        throw new AppError(
+          'Compound code already exists',
+          409,
+          ErrorCodes.CONFLICT,
+        );
+      }
+    }
   }
 }

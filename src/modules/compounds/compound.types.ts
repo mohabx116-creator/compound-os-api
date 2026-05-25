@@ -1,5 +1,6 @@
 export interface CreateCompoundInput {
   name: string;
+  code?: string;
   adminEmail: string;
   address?: string;
   logoUrl?: string;
@@ -9,6 +10,7 @@ export interface CreateCompoundInput {
 
 export interface UpdateCompoundInput {
   name?: string;
+  code?: string;
   adminEmail?: string;
   address?: string;
   logoUrl?: string;
