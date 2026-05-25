@@ -66,15 +66,15 @@ copy .env.example .env
 
 Open the `.env` file and configure your `DATABASE_URL` using the connection strings copied from your **Supabase Dashboard > Connect** panel.
 
-Phase A1 auth foundation also defines these variables:
+Auth phases define these variables:
 
 ```bash
 PASSWORD_SALT_ROUNDS=12
-JWT_SECRET="CHANGE_ME_IN_PHASE_A2"
+JWT_SECRET="CHANGE_ME_TO_A_LONG_RANDOM_SECRET"
 JWT_EXPIRES_IN="7d"
 ```
 
-`JWT_SECRET` is a placeholder for the next phase and is optional in Phase A1. Do not use the placeholder value in production.
+`JWT_SECRET` must be a long random secret before login/JWT issuing can succeed. Do not use the placeholder value in production.
 
 ---
 
@@ -139,12 +139,13 @@ The health check endpoint is the only functional endpoint in this foundation.
 
 ## Auth Foundation Status
 
-Phase A1 prepares authentication data fields, password hashing utilities, role helpers, and a dormant auth module.
+Phase A2 adds backend login and JWT issuing while leaving existing CRUD routes unprotected until Phase A3.
 
 Current auth status:
-- No login endpoint is implemented yet.
-- No JWT is issued yet.
-- Existing CRUD routes are not protected yet.
+- Resident login is available at `POST /api/v1/auth/resident/login`.
+- Admin login is available at `POST /api/v1/auth/admin/login`.
+- Authenticated user lookup is available at `GET /api/v1/auth/me`.
+- Existing CRUD routes are still not protected yet.
 - Frontend apps still use their current mock sessions.
 
 Auth module readiness can be checked with:
@@ -160,11 +161,59 @@ Expected response:
   "success": true,
   "message": "Auth module is ready",
   "data": {
-    "authEnabled": false,
-    "phase": "foundation"
+    "authEnabled": true,
+    "phase": "login-jwt",
+    "residentLogin": true,
+    "adminLogin": true
   }
 }
 ```
+
+### Resident Login
+
+Residents type only phone and password in the UI. The resident app should send `compoundCode` internally after the user selects a compound logo/button.
+
+```http
+POST /api/v1/auth/resident/login
+Content-Type: application/json
+
+{
+  "compoundCode": "black-horse",
+  "phone": "+201222222222",
+  "password": "resident-password"
+}
+```
+
+Successful login returns a safe user object, an access token, and the token expiry. Password hashes are never returned.
+
+### Admin Login
+
+Admin login uses email and password in Phase A2:
+
+```http
+POST /api/v1/auth/admin/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "admin-password"
+}
+```
+
+Only `ADMIN`, `MANAGER`, `ACCOUNTANT`, `SECURITY`, and `MAINTENANCE` roles can use admin login. `RESIDENT` users cannot pass admin login.
+
+### Authenticated User
+
+```http
+GET /api/v1/auth/me
+Authorization: Bearer ACCESS_TOKEN
+```
+
+### Test Password Setup
+
+Current live residents may not have `password_hash` populated yet. A2 does not seed users or mutate live passwords automatically.
+
+For a controlled manual test, generate a bcrypt hash using the backend password utility or a one-off local Node/Prisma script, then intentionally update one known test resident's `password_hash`. Do not commit real passwords or hashes, and do not log secrets. Also make sure the selected compound has a tenant `code`, such as `black-horse`.
 
 ### Test Health Endpoint
 Send a `GET` request to:

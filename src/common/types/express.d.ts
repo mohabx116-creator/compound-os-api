@@ -1,13 +1,9 @@
-export {};
+import type { AuthTokenPayload } from '../../modules/auth/auth.types.js';
 
 declare global {
   namespace Express {
     interface Request {
-      user?: {
-        id: string;
-        compoundId: string;
-        role: string;
-      };
+      auth?: AuthTokenPayload;
     }
   }
 }

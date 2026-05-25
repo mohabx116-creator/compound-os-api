@@ -11,7 +11,11 @@ const envSchema = z.object({
   PASSWORD_SALT_ROUNDS: z.coerce.number().int().min(10).max(15).default(12),
   JWT_SECRET: z.preprocess(
     (value) =>
-      value === '' || value === 'CHANGE_ME_IN_PHASE_A2' ? undefined : value,
+      value === '' ||
+      value === 'CHANGE_ME_IN_PHASE_A2' ||
+      value === 'CHANGE_ME_TO_A_LONG_RANDOM_SECRET'
+        ? undefined
+        : value,
     z.string().min(32).optional(),
   ),
   JWT_EXPIRES_IN: z.string().default('7d'),
