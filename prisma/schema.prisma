@@ -63,9 +63,11 @@ model Compound {
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
-  units      Unit[]
-  residents  Resident[]
-  complaints Complaint[]
+  units             Unit[]
+  residents         Resident[]
+  complaints        Complaint[]
+  serviceCategories ServiceCategory[]
+  serviceProviders  ServiceProvider[]
 
   @@index([isActive])
   @@map("compounds")
@@ -147,4 +149,62 @@ model Complaint {
   @@index([priority])
   @@index([createdAt])
   @@map("complaints")
+}
+
+// ─── Service Directory ────────────────────────────────────────────────────────
+
+enum ProviderStatus {
+  PENDING
+  ACTIVE
+  INACTIVE
+}
+
+model ServiceCategory {
+  id          String   @id @default(uuid())
+  compoundId  String   @map("compound_id")
+  compound    Compound @relation(fields: [compoundId], references: [id], onDelete: Cascade)
+
+  name        String
+  slug        String
+  description String?
+  icon        String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  providers   ServiceProvider[]
+
+  @@unique([compoundId, slug])
+  @@index([compoundId])
+  @@index([isActive])
+  @@map("service_categories")
+}
+
+model ServiceProvider {
+  id             String          @id @default(uuid())
+  compoundId     String          @map("compound_id")
+  compound       Compound        @relation(fields: [compoundId], references: [id], onDelete: Cascade)
+  categoryId     String          @map("category_id")
+  category       ServiceCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  name           String
+  description    String?
+  phone          String?
+  whatsappPhone  String?         @map("whatsapp_phone")
+  email          String?
+  address        String?
+  logoUrl        String?         @map("logo_url")
+  coverImageUrl  String?         @map("cover_image_url")
+  status         ProviderStatus  @default(PENDING)
+  isFeatured     Boolean         @default(false) @map("is_featured")
+  sortOrder      Int             @default(0) @map("sort_order")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  @@index([compoundId])
+  @@index([categoryId])
+  @@index([status])
+  @@index([isFeatured])
+  @@map("service_providers")
 }
