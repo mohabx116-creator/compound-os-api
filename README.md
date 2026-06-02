@@ -133,9 +133,83 @@ Under the **Environment** tab, add the following variables:
 
 ---
 
-## Testing the API
+## Rental Marketplace Foundation
 
-The health check endpoint is the only functional endpoint in this foundation.
+The Rental Marketplace module adds a production-oriented backend foundation for listing rental units inside Compound OS. It supports public listing discovery, tenant contact unlock payments, reservation hold payments, admin listing management, Paymob webhook confirmation, reservation conflict protection, and internal ledger entries for confirmed rentals.
+
+Business defaults:
+- Currency: `EGP`
+- Owner listing publishing fee: `500 EGP`
+- Tenant contact unlock fee: `100 EGP`
+- Reservation hold fee: `1000 EGP`
+- Reservation hold duration after paid webhook: `24 hours`
+- Reservation payment lock window: `10 minutes`
+- Platform commission on confirmed rental: `10%`
+- Listing publish duration: `30 days`
+- Payment provider: `PAYMOB`
+
+### Rental Payment Rules
+
+Payment success is webhook-based. The backend must never trust a frontend callback, redirect, or local UI state as payment confirmation.
+
+Contact details are only returned when a `PAID` `RentalContactUnlock` exists for the same listing and tenant phone. Reservation holds use a transaction and listing status lock so a second tenant cannot reserve the same active listing while payment or hold state is active.
+
+### Rental Endpoints
+
+Base path: `/api/v1/rentals`
+
+Public:
+- `GET /listings`
+- `GET /listings/:slug`
+- `POST /listings/:id/contact-unlock`
+- `GET /listings/:id/contact-access?tenantPhone=...`
+- `POST /listings/:id/reservations`
+- `GET /reservations/:id`
+- `POST /payments/paymob/webhook`
+
+Admin-like endpoints:
+- `GET /admin/listings`
+- `GET /admin/listings/:id`
+- `POST /admin/listings`
+- `PATCH /admin/listings/:id`
+- `PATCH /admin/listings/:id/publish`
+- `PATCH /admin/listings/:id/unpublish`
+- `PATCH /admin/reservations/:id/confirm`
+- `PATCH /admin/reservations/:id/cancel`
+- `POST /admin/maintenance/expire-reservations`
+
+Admin rental routes are intentionally left without strict role middleware until Phase A3 introduces a clear admin role guard.
+
+### Paymob Environment
+
+Configure these values in deployment when enabling real Paymob payment initiation:
+
+```bash
+PAYMOB_API_KEY=""
+PAYMOB_INTEGRATION_ID_CARD=""
+PAYMOB_IFRAME_ID=""
+PAYMOB_HMAC_SECRET=""
+PAYMOB_CALLBACK_URL=""
+PAYMOB_WEBHOOK_SECRET=""
+PUBLIC_RENTAL_BASE_URL=""
+```
+
+Do not commit real Paymob secrets. If Paymob credentials are missing, payment-initiation endpoints return a controlled provider-not-configured error and do not fake success.
+
+### Rental Quality Checks
+
+```bash
+npx prisma validate
+npm run prisma:generate
+npm run type-check
+npm run build
+```
+
+Only run migrations when a migration-safe database URL is configured:
+
+```bash
+npm run prisma:migrate -- --name add_rental_marketplace_core
+```
 
 ## Auth Foundation Status
 

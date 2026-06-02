@@ -51,6 +51,87 @@ enum ComplaintStatus {
   ESCALATED
 }
 
+enum RentalListingStatus {
+  DRAFT
+  PENDING_PAYMENT
+  PENDING_REVIEW
+  ACTIVE
+  PAYMENT_LOCKED
+  RESERVED
+  RENTED
+  EXPIRED
+  SUSPENDED
+  REJECTED
+  REMOVED
+}
+
+enum RentalListingType {
+  APARTMENT
+  VILLA
+  STUDIO
+  DUPLEX
+  OFFICE
+  SHOP
+}
+
+enum RentalFurnishingStatus {
+  UNFURNISHED
+  SEMI_FURNISHED
+  FURNISHED
+}
+
+enum RentalPaymentPurpose {
+  OWNER_LISTING_FEE
+  TENANT_CONTACT_UNLOCK
+  TENANT_RESERVATION_HOLD
+  RENTAL_FINAL_PAYMENT
+  PLATFORM_COMMISSION
+  OWNER_PAYOUT
+}
+
+enum RentalPaymentStatus {
+  INITIATED
+  PENDING
+  PAID
+  FAILED
+  EXPIRED
+  CANCELLED
+  REFUNDED
+  PARTIALLY_REFUNDED
+  DISPUTED
+}
+
+enum RentalReservationStatus {
+  PENDING_PAYMENT
+  PAYMENT_LOCKED
+  PAID_PENDING_CONFIRMATION
+  RESERVED
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+  REFUNDED
+  REJECTED
+}
+
+enum RentalInquiryStatus {
+  NEW
+  CONTACT_UNLOCKED
+  VIEWING_REQUESTED
+  CLOSED
+  CANCELLED
+}
+
+enum RentalOwnerStatus {
+  PENDING_REVIEW
+  ACTIVE
+  SUSPENDED
+  REJECTED
+}
+
+enum PaymentProvider {
+  PAYMOB
+}
+
 model Compound {
   id         String   @id @default(uuid())
   name       String
@@ -68,6 +149,13 @@ model Compound {
   complaints        Complaint[]
   serviceCategories ServiceCategory[]
   serviceProviders  ServiceProvider[]
+  rentalOwners      RentalOwner[]
+  rentalListings    RentalListing[]
+  rentalInquiries   RentalInquiry[]
+  rentalUnlocks     RentalContactUnlock[]
+  rentalReservations RentalReservation[]
+  rentalPayments    RentalPayment[]
+  rentalLedgerEntries RentalPlatformLedgerEntry[]
 
   @@index([isActive])
   @@map("compounds")
@@ -87,6 +175,7 @@ model Unit {
 
   residents  Resident[]
   complaints Complaint[]
+  rentalListings RentalListing[]
 
   @@unique([compoundId, unitNumber])
   @@index([compoundId])
@@ -115,6 +204,10 @@ model Resident {
   updatedAt           DateTime       @updatedAt @map("updated_at")
 
   complaints Complaint[]
+  rentalOwnerProfiles RentalOwner[]
+  rentalInquiries RentalInquiry[]
+  rentalUnlocks RentalContactUnlock[]
+  rentalReservations RentalReservation[]
 
   @@unique([compoundId, phone])
   @@index([compoundId])
@@ -149,6 +242,250 @@ model Complaint {
   @@index([priority])
   @@index([createdAt])
   @@map("complaints")
+}
+
+model RentalOwner {
+  id         String            @id @default(uuid())
+  compoundId String            @map("compound_id")
+  compound   Compound          @relation(fields: [compoundId], references: [id], onDelete: Cascade)
+  residentId String?           @map("resident_id")
+  resident   Resident?         @relation(fields: [residentId], references: [id], onDelete: SetNull)
+  fullName   String            @map("full_name")
+  phone      String
+  email      String?
+  nationalId String?           @map("national_id")
+  status     RentalOwnerStatus @default(PENDING_REVIEW)
+  createdAt  DateTime          @default(now()) @map("created_at")
+  updatedAt  DateTime          @updatedAt @map("updated_at")
+
+  listings RentalListing[]
+
+  @@unique([compoundId, phone])
+  @@index([compoundId])
+  @@index([phone])
+  @@index([status])
+  @@map("rental_owners")
+}
+
+model RentalListing {
+  id                     String                 @id @default(uuid())
+  compoundId             String                 @map("compound_id")
+  compound               Compound               @relation(fields: [compoundId], references: [id], onDelete: Cascade)
+  unitId                 String?                @map("unit_id")
+  unit                   Unit?                  @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  ownerId                String                 @map("owner_id")
+  owner                  RentalOwner            @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  title                  String
+  slug                   String
+  description            String
+  listingType            RentalListingType      @map("listing_type")
+  furnishingStatus       RentalFurnishingStatus @map("furnishing_status")
+  bedrooms               Int
+  bathrooms              Int
+  areaSqm                Decimal                @map("area_sqm") @db.Decimal(10, 2)
+  floor                  Int?
+  monthlyRent            Decimal                @map("monthly_rent") @db.Decimal(12, 2)
+  depositAmount          Decimal?               @map("deposit_amount") @db.Decimal(12, 2)
+  contactUnlockFee       Decimal                @default(100.00) @map("contact_unlock_fee") @db.Decimal(12, 2)
+  reservationFee         Decimal                @default(1000.00) @map("reservation_fee") @db.Decimal(12, 2)
+  platformCommissionRate Decimal                @default(10.00) @map("platform_commission_rate") @db.Decimal(5, 2)
+  status                 RentalListingStatus    @default(DRAFT)
+  addressText            String?                @map("address_text")
+  locationText           String?                @map("location_text")
+  isPublished            Boolean                @default(false) @map("is_published")
+  isFeatured             Boolean                @default(false) @map("is_featured")
+  publishedAt            DateTime?              @map("published_at")
+  expiresAt              DateTime?              @map("expires_at")
+  reservedUntil          DateTime?              @map("reserved_until")
+  rentedAt               DateTime?              @map("rented_at")
+  createdAt              DateTime               @default(now()) @map("created_at")
+  updatedAt              DateTime               @updatedAt @map("updated_at")
+
+  images         RentalListingImage[]
+  inquiries      RentalInquiry[]
+  contactUnlocks RentalContactUnlock[]
+  reservations   RentalReservation[]
+  payments       RentalPayment[]
+  ledgerEntries  RentalPlatformLedgerEntry[]
+
+  @@unique([slug])
+  @@index([compoundId])
+  @@index([ownerId])
+  @@index([unitId])
+  @@index([status])
+  @@index([slug])
+  @@index([isPublished])
+  @@index([isFeatured])
+  @@index([monthlyRent])
+  @@index([createdAt])
+  @@map("rental_listings")
+}
+
+model RentalListingImage {
+  id        String        @id @default(uuid())
+  listingId String        @map("listing_id")
+  listing   RentalListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  url       String
+  altText   String?       @map("alt_text")
+  sortOrder Int           @default(0) @map("sort_order")
+  isCover   Boolean       @default(false) @map("is_cover")
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  @@index([listingId])
+  @@index([isCover])
+  @@index([sortOrder])
+  @@map("rental_listing_images")
+}
+
+model RentalInquiry {
+  id               String              @id @default(uuid())
+  listingId        String              @map("listing_id")
+  listing          RentalListing       @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  compoundId       String              @map("compound_id")
+  compound         Compound            @relation(fields: [compoundId], references: [id], onDelete: Cascade)
+  tenantResidentId String?             @map("tenant_resident_id")
+  tenantResident   Resident?           @relation(fields: [tenantResidentId], references: [id], onDelete: SetNull)
+  tenantName       String              @map("tenant_name")
+  tenantPhone      String              @map("tenant_phone")
+  tenantEmail      String?             @map("tenant_email")
+  message          String?
+  status           RentalInquiryStatus @default(NEW)
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt @map("updated_at")
+
+  @@index([listingId])
+  @@index([compoundId])
+  @@index([tenantPhone])
+  @@index([status])
+  @@map("rental_inquiries")
+}
+
+model RentalContactUnlock {
+  id               String              @id @default(uuid())
+  listingId        String              @map("listing_id")
+  listing          RentalListing       @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  compoundId       String              @map("compound_id")
+  compound         Compound            @relation(fields: [compoundId], references: [id], onDelete: Cascade)
+  tenantResidentId String?             @map("tenant_resident_id")
+  tenantResident   Resident?           @relation(fields: [tenantResidentId], references: [id], onDelete: SetNull)
+  tenantName       String              @map("tenant_name")
+  tenantPhone      String              @map("tenant_phone")
+  tenantEmail      String?             @map("tenant_email")
+  paymentId        String?             @map("payment_id")
+  amount           Decimal             @db.Decimal(12, 2)
+  currency         String              @default("EGP")
+  status           RentalPaymentStatus @default(INITIATED)
+  unlockedAt       DateTime?           @map("unlocked_at")
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt @map("updated_at")
+
+  payments RentalPayment[]
+
+  @@unique([listingId, tenantPhone])
+  @@index([listingId])
+  @@index([compoundId])
+  @@index([tenantPhone])
+  @@index([status])
+  @@map("rental_contact_unlocks")
+}
+
+model RentalReservation {
+  id               String                  @id @default(uuid())
+  listingId        String                  @map("listing_id")
+  listing          RentalListing           @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  compoundId       String                  @map("compound_id")
+  compound         Compound                @relation(fields: [compoundId], references: [id], onDelete: Cascade)
+  tenantResidentId String?                 @map("tenant_resident_id")
+  tenantResident   Resident?               @relation(fields: [tenantResidentId], references: [id], onDelete: SetNull)
+  tenantName       String                  @map("tenant_name")
+  tenantPhone      String                  @map("tenant_phone")
+  tenantEmail      String?                 @map("tenant_email")
+  paymentId        String?                 @map("payment_id")
+  amount           Decimal                 @db.Decimal(12, 2)
+  currency         String                  @default("EGP")
+  status           RentalReservationStatus @default(PENDING_PAYMENT)
+  reservedUntil    DateTime?               @map("reserved_until")
+  confirmedAt      DateTime?               @map("confirmed_at")
+  cancelledAt      DateTime?               @map("cancelled_at")
+  expiredAt        DateTime?               @map("expired_at")
+  createdAt        DateTime                @default(now()) @map("created_at")
+  updatedAt        DateTime                @updatedAt @map("updated_at")
+
+  payments      RentalPayment[]
+  ledgerEntries RentalPlatformLedgerEntry[]
+
+  @@index([listingId])
+  @@index([compoundId])
+  @@index([tenantPhone])
+  @@index([status])
+  @@index([reservedUntil])
+  @@index([listingId, status, reservedUntil])
+  @@map("rental_reservations")
+}
+
+model RentalPayment {
+  id                    String               @id @default(uuid())
+  compoundId            String               @map("compound_id")
+  compound              Compound             @relation(fields: [compoundId], references: [id], onDelete: Cascade)
+  listingId             String?              @map("listing_id")
+  listing               RentalListing?       @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  reservationId         String?              @map("reservation_id")
+  reservation           RentalReservation?   @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  contactUnlockId       String?              @map("contact_unlock_id")
+  contactUnlock         RentalContactUnlock? @relation(fields: [contactUnlockId], references: [id], onDelete: SetNull)
+  purpose               RentalPaymentPurpose
+  provider              PaymentProvider      @default(PAYMOB)
+  providerOrderId       String?              @map("provider_order_id")
+  providerTransactionId String?              @map("provider_transaction_id")
+  amount                Decimal              @db.Decimal(12, 2)
+  currency              String               @default("EGP")
+  status                RentalPaymentStatus  @default(INITIATED)
+  idempotencyKey        String?              @unique @map("idempotency_key")
+  paymentUrl            String?              @map("payment_url")
+  rawProviderPayload    Json?                @map("raw_provider_payload")
+  paidAt                DateTime?            @map("paid_at")
+  failedAt              DateTime?            @map("failed_at")
+  refundedAt            DateTime?            @map("refunded_at")
+  createdAt             DateTime             @default(now()) @map("created_at")
+  updatedAt             DateTime             @updatedAt @map("updated_at")
+
+  ledgerEntries RentalPlatformLedgerEntry[]
+
+  @@unique([provider, providerTransactionId])
+  @@index([compoundId])
+  @@index([listingId])
+  @@index([reservationId])
+  @@index([contactUnlockId])
+  @@index([provider])
+  @@index([providerOrderId])
+  @@index([providerTransactionId])
+  @@index([status])
+  @@index([purpose])
+  @@map("rental_payments")
+}
+
+model RentalPlatformLedgerEntry {
+  id            String             @id @default(uuid())
+  compoundId    String             @map("compound_id")
+  compound      Compound           @relation(fields: [compoundId], references: [id], onDelete: Cascade)
+  listingId     String?            @map("listing_id")
+  listing       RentalListing?     @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  reservationId String?            @map("reservation_id")
+  reservation   RentalReservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  paymentId     String?            @map("payment_id")
+  payment       RentalPayment?     @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  entryType     String             @map("entry_type")
+  amount        Decimal            @db.Decimal(12, 2)
+  currency      String             @default("EGP")
+  description   String
+  createdAt     DateTime           @default(now()) @map("created_at")
+
+  @@index([compoundId])
+  @@index([listingId])
+  @@index([reservationId])
+  @@index([paymentId])
+  @@map("rental_platform_ledger_entries")
 }
 
 // ─── Service Directory ────────────────────────────────────────────────────────

@@ -4,6 +4,16 @@ import { z } from 'zod';
 // Load environment variables from .env if present
 dotenv.config();
 
+const optionalEnvString = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z.string().optional(),
+);
+
+const optionalEnvUrl = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z.string().url().optional(),
+);
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']),
   PORT: z.coerce.number().default(4000),
@@ -19,6 +29,13 @@ const envSchema = z.object({
     z.string().min(32).optional(),
   ),
   JWT_EXPIRES_IN: z.string().default('7d'),
+  PAYMOB_API_KEY: optionalEnvString,
+  PAYMOB_INTEGRATION_ID_CARD: optionalEnvString,
+  PAYMOB_IFRAME_ID: optionalEnvString,
+  PAYMOB_HMAC_SECRET: optionalEnvString,
+  PAYMOB_CALLBACK_URL: optionalEnvUrl,
+  PAYMOB_WEBHOOK_SECRET: optionalEnvString,
+  PUBLIC_RENTAL_BASE_URL: optionalEnvUrl,
 });
 
 const parsed = envSchema.safeParse(process.env);

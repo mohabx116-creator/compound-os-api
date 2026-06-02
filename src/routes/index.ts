@@ -7,6 +7,7 @@ import { complaintRoutes } from '../modules/complaints/complaint.routes.js';
 import { authRoutes } from '../modules/auth/auth.routes.js';
 import { serviceCategoryRoutes } from '../modules/service-categories/service-category.routes.js';
 import { serviceProviderRoutes } from '../modules/service-providers/service-provider.routes.js';
+import { rentalRoutes } from '../modules/rentals/rental.routes.js';
 
 const router = Router();
 
@@ -23,5 +24,6 @@ router.use('/complaints', complaintRoutes);
 // Mount Service Directory routes (B1A — read-only)
 router.use('/service-categories', serviceCategoryRoutes);
 router.use('/service-providers', serviceProviderRoutes);
+router.use('/rentals', rentalRoutes);
 
 export const apiRoutes = router;
