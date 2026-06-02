@@ -8,13 +8,88 @@ import type {
   AdminRentalListQuery,
   AdminUpdateListingInput,
   ContactAccessQuery,
+  CreateRentalOwnerInput,
   RentalIdParams,
   RentalListQuery,
+  RentalOwnerParams,
+  RentalOwnerQuery,
   RentalSlugParams,
   TenantPaymentRequestInput,
+  UpdateRentalOwnerInput,
 } from './rental.types.js';
 
 export class RentalController {
+  static listRentalOwners = asyncHandler(async (req: Request, res: Response) => {
+    const result = await RentalService.listRentalOwners(
+      req.query as unknown as RentalOwnerQuery,
+    );
+
+    successResponse({
+      res,
+      message: 'Rental owners retrieved successfully',
+      data: result.owners,
+      meta: result.meta,
+    });
+  });
+
+  static getRentalOwnerById = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params as unknown as RentalOwnerParams;
+    const owner = await RentalService.getRentalOwnerById(id);
+
+    successResponse({
+      res,
+      message: 'Rental owner retrieved successfully',
+      data: owner,
+    });
+  });
+
+  static createRentalOwner = asyncHandler(async (req: Request, res: Response) => {
+    const owner = await RentalService.createRentalOwner(req.body as CreateRentalOwnerInput);
+
+    successResponse({
+      res,
+      statusCode: 201,
+      message: 'Rental owner created successfully',
+      data: owner,
+    });
+  });
+
+  static updateRentalOwner = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params as unknown as RentalOwnerParams;
+    const owner = await RentalService.updateRentalOwner(
+      id,
+      req.body as UpdateRentalOwnerInput,
+    );
+
+    successResponse({
+      res,
+      message: 'Rental owner updated successfully',
+      data: owner,
+    });
+  });
+
+  static activateRentalOwner = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params as unknown as RentalOwnerParams;
+    const owner = await RentalService.activateRentalOwner(id);
+
+    successResponse({
+      res,
+      message: 'Rental owner activated successfully',
+      data: owner,
+    });
+  });
+
+  static deactivateRentalOwner = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params as unknown as RentalOwnerParams;
+    const owner = await RentalService.deactivateRentalOwner(id);
+
+    successResponse({
+      res,
+      message: 'Rental owner deactivated successfully',
+      data: owner,
+    });
+  });
+
   static listPublicListings = asyncHandler(async (req: Request, res: Response) => {
     const result = await RentalService.listPublicListings(req.query as unknown as RentalListQuery);
 

@@ -2,6 +2,7 @@ import {
   PaymentProvider,
   Prisma,
   RentalListingStatus,
+  RentalOwnerStatus,
   RentalPaymentPurpose,
   RentalPaymentStatus,
   RentalReservationStatus,
@@ -24,10 +25,14 @@ import type {
   AdminRentalListQuery,
   AdminUpdateListingInput,
   ContactAccessQuery,
+  CreateRentalOwnerInput,
   RentalIdParams,
   RentalListQuery,
+  RentalOwnerParams,
+  RentalOwnerQuery,
   RentalSlugParams,
   TenantPaymentRequestInput,
+  UpdateRentalOwnerInput,
 } from './rental.types.js';
 
 const publicListingSelect = {
@@ -109,6 +114,59 @@ const adminListingInclude = {
   },
 } satisfies Prisma.RentalListingInclude;
 
+const adminOwnerSelect = {
+  id: true,
+  compoundId: true,
+  residentId: true,
+  fullName: true,
+  phone: true,
+  email: true,
+  nationalId: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+  compound: {
+    select: {
+      id: true,
+      name: true,
+      code: true,
+      isActive: true,
+    },
+  },
+  resident: {
+    select: {
+      id: true,
+      fullName: true,
+      phone: true,
+      email: true,
+      status: true,
+    },
+  },
+  _count: {
+    select: {
+      listings: true,
+    },
+  },
+} satisfies Prisma.RentalOwnerSelect;
+
+const adminOwnerDetailSelect = {
+  ...adminOwnerSelect,
+  listings: {
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      status: true,
+      isPublished: true,
+      monthlyRent: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+  },
+} satisfies Prisma.RentalOwnerSelect;
+
 const activeReservationStatuses: RentalReservationStatus[] = [
   RentalReservationStatus.PAYMENT_LOCKED,
   RentalReservationStatus.PAID_PENDING_CONFIRMATION,
@@ -127,6 +185,115 @@ const confirmableReservationStatuses: RentalReservationStatus[] = [
 ];
 
 export class RentalService {
+  static async listRentalOwners(query: RentalOwnerQuery) {
+    const where = this.buildRentalOwnerWhere(query);
+
+    const [totalCount, owners] = await prisma.$transaction([
+      prisma.rentalOwner.count({ where }),
+      prisma.rentalOwner.findMany({
+        where,
+        ...getPrismaPagination(query),
+        select: adminOwnerSelect,
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    return {
+      owners,
+      meta: getPaginationMeta(query, totalCount),
+    };
+  }
+
+  static async getRentalOwnerById(id: RentalOwnerParams['id']) {
+    const owner = await prisma.rentalOwner.findUnique({
+      where: { id },
+      select: adminOwnerDetailSelect,
+    });
+
+    if (!owner) {
+      throw new AppError(
+        'Rental owner not found',
+        404,
+        ErrorCodes.RENTAL_OWNER_NOT_FOUND,
+      );
+    }
+
+    return owner;
+  }
+
+  static async createRentalOwner(input: CreateRentalOwnerInput) {
+    const data = this.normalizeRentalOwnerInput(input);
+    await this.validateRentalOwnerReferences(data.compoundId, data.residentId);
+
+    try {
+      return await prisma.rentalOwner.create({
+        data: {
+          compoundId: data.compoundId,
+          residentId: data.residentId,
+          fullName: data.fullName,
+          phone: data.phone,
+          email: data.email,
+          nationalId: data.nationalId,
+          status: data.status ?? RentalOwnerStatus.ACTIVE,
+        },
+        select: adminOwnerDetailSelect,
+      });
+    } catch (error) {
+      this.handleRentalOwnerUniqueConstraint(error);
+      throw error;
+    }
+  }
+
+  static async updateRentalOwner(
+    id: RentalOwnerParams['id'],
+    input: UpdateRentalOwnerInput,
+  ) {
+    const existingOwner = await this.getRentalOwnerById(id);
+    const data = this.normalizeRentalOwnerInput(input);
+
+    if (data.residentId !== undefined) {
+      await this.validateRentalOwnerReferences(existingOwner.compoundId, data.residentId);
+    }
+
+    try {
+      return await prisma.rentalOwner.update({
+        where: { id },
+        data: {
+          residentId: data.residentId,
+          fullName: data.fullName,
+          phone: data.phone,
+          email: data.email,
+          nationalId: data.nationalId,
+          status: data.status,
+        },
+        select: adminOwnerDetailSelect,
+      });
+    } catch (error) {
+      this.handleRentalOwnerUniqueConstraint(error);
+      throw error;
+    }
+  }
+
+  static async activateRentalOwner(id: RentalOwnerParams['id']) {
+    await this.getRentalOwnerById(id);
+
+    return prisma.rentalOwner.update({
+      where: { id },
+      data: { status: RentalOwnerStatus.ACTIVE },
+      select: adminOwnerDetailSelect,
+    });
+  }
+
+  static async deactivateRentalOwner(id: RentalOwnerParams['id']) {
+    await this.getRentalOwnerById(id);
+
+    return prisma.rentalOwner.update({
+      where: { id },
+      data: { status: RentalOwnerStatus.SUSPENDED },
+      select: adminOwnerDetailSelect,
+    });
+  }
+
   static async listPublicListings(query: RentalListQuery) {
     const now = new Date();
     const where = this.buildPublicListingWhere(query, now);
@@ -882,6 +1049,81 @@ export class RentalService {
     }
 
     return listing;
+  }
+
+  private static buildRentalOwnerWhere(query: RentalOwnerQuery) {
+    const where: Prisma.RentalOwnerWhereInput = {};
+
+    if (query.search) {
+      where.OR = [
+        { fullName: { contains: query.search, mode: 'insensitive' } },
+        { phone: { contains: query.search, mode: 'insensitive' } },
+        { email: { contains: query.search, mode: 'insensitive' } },
+        { nationalId: { contains: query.search, mode: 'insensitive' } },
+      ];
+    }
+
+    if (query.compoundId) {
+      where.compoundId = query.compoundId;
+    }
+
+    if (query.status) {
+      where.status = query.status;
+    }
+
+    return where;
+  }
+
+  private static normalizeRentalOwnerInput<T extends CreateRentalOwnerInput | UpdateRentalOwnerInput>(
+    input: T,
+  ): T {
+    return {
+      ...input,
+      fullName: input.fullName?.trim(),
+      phone: input.phone?.trim(),
+      email: input.email?.trim() || undefined,
+      nationalId: input.nationalId?.trim() || undefined,
+      residentId: input.residentId || undefined,
+    };
+  }
+
+  private static async validateRentalOwnerReferences(
+    compoundId: string,
+    residentId?: string,
+  ) {
+    const [compound, resident] = await Promise.all([
+      prisma.compound.findUnique({ where: { id: compoundId } }),
+      residentId ? prisma.resident.findUnique({ where: { id: residentId } }) : Promise.resolve(null),
+    ]);
+
+    if (!compound || !compound.isActive) {
+      throw new AppError('Active compound not found', 404, ErrorCodes.NOT_FOUND);
+    }
+
+    if (residentId && (!resident || resident.compoundId !== compoundId)) {
+      throw new AppError(
+        'Resident must belong to the same compound',
+        409,
+        ErrorCodes.CONFLICT,
+      );
+    }
+  }
+
+  private static handleRentalOwnerUniqueConstraint(error: unknown) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    ) {
+      const target = Array.isArray(error.meta?.target) ? error.meta.target : [];
+
+      if (target.includes('compound_id') || target.includes('phone')) {
+        throw new AppError(
+          'Rental owner phone already exists in this compound',
+          409,
+          ErrorCodes.CONFLICT,
+        );
+      }
+    }
   }
 
   private static async validateListingReferences(

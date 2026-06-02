@@ -31,6 +31,7 @@ const tenantPhoneSchema = z
 
 const listingTypeSchema = z.enum(['APARTMENT', 'VILLA', 'STUDIO', 'DUPLEX', 'OFFICE', 'SHOP']);
 const furnishingStatusSchema = z.enum(['UNFURNISHED', 'SEMI_FURNISHED', 'FURNISHED']);
+const rentalOwnerStatusSchema = z.enum(['PENDING_REVIEW', 'ACTIVE', 'SUSPENDED', 'REJECTED']);
 const listingStatusSchema = z.enum([
   'DRAFT',
   'PENDING_PAYMENT',
@@ -75,8 +76,20 @@ export const adminRentalListQuerySchema = rentalListQueryBaseSchema
   })
   .refine(rentRangeSchema, 'minRent must be less than or equal to maxRent');
 
+export const rentalOwnerQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(10),
+  search: optionalSearch,
+  compoundId: z.string().uuid('Invalid compound id').optional(),
+  status: rentalOwnerStatusSchema.optional(),
+});
+
 export const rentalIdParamsSchema = z.object({
   id: z.string().uuid('Invalid id'),
+});
+
+export const rentalOwnerParamsSchema = z.object({
+  id: z.string().uuid('Invalid owner id'),
 });
 
 export const rentalSlugParamsSchema = z.object({
@@ -129,6 +142,23 @@ export const adminCreateListingSchema = z
   .strict();
 
 export const adminUpdateListingSchema = adminCreateListingSchema
+  .omit({ compoundId: true })
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, 'At least one field is required');
+
+export const createRentalOwnerSchema = z
+  .object({
+    compoundId: z.string().uuid('Invalid compound id'),
+    residentId: z.string().uuid('Invalid resident id').optional(),
+    fullName: z.string().trim().min(2, 'Owner name is required').max(150),
+    phone: z.string().trim().min(5, 'Owner phone is required').max(30),
+    email: optionalEmail,
+    nationalId: optionalText(50),
+    status: rentalOwnerStatusSchema.default('ACTIVE'),
+  })
+  .strict();
+
+export const updateRentalOwnerSchema = createRentalOwnerSchema
   .omit({ compoundId: true })
   .partial()
   .refine((value) => Object.keys(value).length > 0, 'At least one field is required');

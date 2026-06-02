@@ -2,6 +2,7 @@ import type {
   RentalFurnishingStatus,
   RentalListingStatus,
   RentalListingType,
+  RentalOwnerStatus,
 } from '@prisma/client';
 
 export interface RentalListQuery {
@@ -22,7 +23,19 @@ export interface AdminRentalListQuery extends RentalListQuery {
   ownerId?: string;
 }
 
+export interface RentalOwnerQuery {
+  page: number;
+  limit: number;
+  search?: string;
+  compoundId?: string;
+  status?: RentalOwnerStatus;
+}
+
 export interface RentalIdParams {
+  id: string;
+}
+
+export interface RentalOwnerParams {
   id: string;
 }
 
@@ -75,6 +88,20 @@ export type AdminUpdateListingInput = Partial<
   ownerId?: string;
   images?: AdminListingImageInput[];
 };
+
+export interface CreateRentalOwnerInput {
+  compoundId: string;
+  residentId?: string;
+  fullName: string;
+  phone: string;
+  email?: string;
+  nationalId?: string;
+  status?: RentalOwnerStatus;
+}
+
+export type UpdateRentalOwnerInput = Partial<
+  Omit<CreateRentalOwnerInput, 'compoundId'>
+>;
 
 export interface PaymobWebhookInput {
   body: Record<string, any>;

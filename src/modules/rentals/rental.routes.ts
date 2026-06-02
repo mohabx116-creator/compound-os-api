@@ -6,10 +6,14 @@ import {
   adminRentalListQuerySchema,
   adminUpdateListingSchema,
   contactAccessQuerySchema,
+  createRentalOwnerSchema,
+  rentalOwnerParamsSchema,
+  rentalOwnerQuerySchema,
   rentalIdParamsSchema,
   rentalListQuerySchema,
   rentalSlugParamsSchema,
   tenantPaymentRequestSchema,
+  updateRentalOwnerSchema,
 } from './rental.schema.js';
 
 const router = Router();
@@ -53,6 +57,42 @@ router.get(
 router.post('/payments/paymob/webhook', RentalController.handlePaymobWebhook);
 
 // TODO Phase A3: protect admin rental routes with ADMIN/MANAGER role middleware.
+router.get(
+  '/admin/owners',
+  validate({ query: rentalOwnerQuerySchema }),
+  RentalController.listRentalOwners,
+);
+
+router.get(
+  '/admin/owners/:id',
+  validate({ params: rentalOwnerParamsSchema }),
+  RentalController.getRentalOwnerById,
+);
+
+router.post(
+  '/admin/owners',
+  validate({ body: createRentalOwnerSchema }),
+  RentalController.createRentalOwner,
+);
+
+router.patch(
+  '/admin/owners/:id',
+  validate({ params: rentalOwnerParamsSchema, body: updateRentalOwnerSchema }),
+  RentalController.updateRentalOwner,
+);
+
+router.patch(
+  '/admin/owners/:id/activate',
+  validate({ params: rentalOwnerParamsSchema }),
+  RentalController.activateRentalOwner,
+);
+
+router.patch(
+  '/admin/owners/:id/deactivate',
+  validate({ params: rentalOwnerParamsSchema }),
+  RentalController.deactivateRentalOwner,
+);
+
 router.get(
   '/admin/listings',
   validate({ query: adminRentalListQuerySchema }),

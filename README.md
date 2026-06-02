@@ -168,6 +168,12 @@ Public:
 - `POST /payments/paymob/webhook`
 
 Admin-like endpoints:
+- `GET /admin/owners`
+- `GET /admin/owners/:id`
+- `POST /admin/owners`
+- `PATCH /admin/owners/:id`
+- `PATCH /admin/owners/:id/activate`
+- `PATCH /admin/owners/:id/deactivate`
 - `GET /admin/listings`
 - `GET /admin/listings/:id`
 - `POST /admin/listings`
@@ -179,6 +185,8 @@ Admin-like endpoints:
 - `POST /admin/maintenance/expire-reservations`
 
 Admin rental routes are intentionally left without strict role middleware until Phase A3 introduces a clear admin role guard.
+
+Owner deactivation uses `status=SUSPENDED`; `RentalOwnerStatus` does not include an `INACTIVE` enum value.
 
 ### Paymob Environment
 
