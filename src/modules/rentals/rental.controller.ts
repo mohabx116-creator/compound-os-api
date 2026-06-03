@@ -9,12 +9,16 @@ import type {
   AdminUpdateListingInput,
   ContactAccessQuery,
   CreateRentalOwnerInput,
+  CreateRentalInquiryInput,
   RentalIdParams,
+  RentalInquiryParams,
+  RentalInquiryQuery,
   RentalListQuery,
   RentalOwnerParams,
   RentalOwnerQuery,
   RentalSlugParams,
   TenantPaymentRequestInput,
+  UpdateRentalInquiryStatusInput,
   UpdateRentalOwnerInput,
 } from './rental.types.js';
 
@@ -112,6 +116,21 @@ export class RentalController {
     });
   });
 
+  static createRentalInquiry = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params as unknown as RentalIdParams;
+    const inquiry = await RentalService.createRentalInquiry(
+      id,
+      req.body as CreateRentalInquiryInput,
+    );
+
+    successResponse({
+      res,
+      statusCode: 201,
+      message: 'Rental inquiry submitted successfully',
+      data: inquiry,
+    });
+  });
+
   static startContactUnlockPayment = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params as unknown as RentalIdParams;
     const result = await RentalService.startContactUnlockPayment(
@@ -190,6 +209,44 @@ export class RentalController {
       res,
       message: 'Admin rental listing retrieved successfully',
       data: listing,
+    });
+  });
+
+  static listAdminInquiries = asyncHandler(async (req: Request, res: Response) => {
+    const result = await RentalService.listAdminInquiries(
+      req.query as unknown as RentalInquiryQuery,
+    );
+
+    successResponse({
+      res,
+      message: 'Rental inquiries retrieved successfully',
+      data: result.inquiries,
+      meta: result.meta,
+    });
+  });
+
+  static getAdminInquiryById = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params as unknown as RentalInquiryParams;
+    const inquiry = await RentalService.getAdminInquiryById(id);
+
+    successResponse({
+      res,
+      message: 'Rental inquiry retrieved successfully',
+      data: inquiry,
+    });
+  });
+
+  static updateAdminInquiryStatus = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params as unknown as RentalInquiryParams;
+    const inquiry = await RentalService.updateAdminInquiryStatus(
+      id,
+      req.body as UpdateRentalInquiryStatusInput,
+    );
+
+    successResponse({
+      res,
+      message: 'Rental inquiry status updated successfully',
+      data: inquiry,
     });
   });
 

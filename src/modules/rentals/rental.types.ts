@@ -1,5 +1,6 @@
 import type {
   RentalFurnishingStatus,
+  RentalInquiryStatus,
   RentalListingStatus,
   RentalListingType,
   RentalOwnerStatus,
@@ -51,6 +52,33 @@ export interface TenantPaymentRequestInput {
 
 export interface ContactAccessQuery {
   tenantPhone: string;
+}
+
+export type RentalInquiryType = 'VIEWING_REQUEST' | 'GENERAL';
+
+export interface CreateRentalInquiryInput {
+  tenantName: string;
+  tenantPhone: string;
+  tenantEmail?: string;
+  message?: string;
+  inquiryType?: RentalInquiryType;
+}
+
+export interface RentalInquiryQuery {
+  page: number;
+  limit: number;
+  search?: string;
+  listingId?: string;
+  compoundId?: string;
+  status?: RentalInquiryStatus;
+}
+
+export interface RentalInquiryParams {
+  id: string;
+}
+
+export interface UpdateRentalInquiryStatusInput {
+  status: RentalInquiryStatus;
 }
 
 export interface AdminListingImageInput {

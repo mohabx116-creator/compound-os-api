@@ -1,6 +1,7 @@
 import {
   PaymentProvider,
   Prisma,
+  RentalInquiryStatus,
   RentalListingStatus,
   RentalOwnerStatus,
   RentalPaymentPurpose,
@@ -26,12 +27,16 @@ import type {
   AdminUpdateListingInput,
   ContactAccessQuery,
   CreateRentalOwnerInput,
+  CreateRentalInquiryInput,
   RentalIdParams,
+  RentalInquiryParams,
+  RentalInquiryQuery,
   RentalListQuery,
   RentalOwnerParams,
   RentalOwnerQuery,
   RentalSlugParams,
   TenantPaymentRequestInput,
+  UpdateRentalInquiryStatusInput,
   UpdateRentalOwnerInput,
 } from './rental.types.js';
 
@@ -166,6 +171,49 @@ const adminOwnerDetailSelect = {
     take: 20,
   },
 } satisfies Prisma.RentalOwnerSelect;
+
+const adminInquirySelect = {
+  id: true,
+  listingId: true,
+  compoundId: true,
+  tenantResidentId: true,
+  tenantName: true,
+  tenantPhone: true,
+  tenantEmail: true,
+  message: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+  listing: {
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      status: true,
+      isPublished: true,
+      monthlyRent: true,
+      addressText: true,
+      locationText: true,
+    },
+  },
+  compound: {
+    select: {
+      id: true,
+      name: true,
+      code: true,
+      address: true,
+    },
+  },
+  tenantResident: {
+    select: {
+      id: true,
+      fullName: true,
+      phone: true,
+      email: true,
+      status: true,
+    },
+  },
+} satisfies Prisma.RentalInquirySelect;
 
 const activeReservationStatuses: RentalReservationStatus[] = [
   RentalReservationStatus.PAYMENT_LOCKED,
@@ -334,6 +382,36 @@ export class RentalService {
     }
 
     return listing;
+  }
+
+  static async createRentalInquiry(
+    listingId: RentalIdParams['id'],
+    input: CreateRentalInquiryInput,
+  ) {
+    const listing = await this.getAvailableListingForInquiry(listingId);
+    const tenantPhone = this.normalizePhone(input.tenantPhone);
+    const status =
+      input.inquiryType === 'VIEWING_REQUEST'
+        ? RentalInquiryStatus.VIEWING_REQUESTED
+        : RentalInquiryStatus.NEW;
+
+    const inquiry = await prisma.rentalInquiry.create({
+      data: {
+        listingId: listing.id,
+        compoundId: listing.compoundId,
+        tenantName: input.tenantName,
+        tenantPhone,
+        tenantEmail: input.tenantEmail,
+        message: input.message,
+        status,
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    return inquiry;
   }
 
   static async startContactUnlockPayment(
@@ -726,6 +804,55 @@ export class RentalService {
     return listing;
   }
 
+  static async listAdminInquiries(query: RentalInquiryQuery) {
+    const where = this.buildAdminInquiryWhere(query);
+
+    const [totalCount, inquiries] = await prisma.$transaction([
+      prisma.rentalInquiry.count({ where }),
+      prisma.rentalInquiry.findMany({
+        where,
+        ...getPrismaPagination(query),
+        select: adminInquirySelect,
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    return {
+      inquiries,
+      meta: getPaginationMeta(query, totalCount),
+    };
+  }
+
+  static async getAdminInquiryById(id: RentalInquiryParams['id']) {
+    const inquiry = await prisma.rentalInquiry.findUnique({
+      where: { id },
+      select: adminInquirySelect,
+    });
+
+    if (!inquiry) {
+      throw new AppError(
+        'Rental inquiry not found',
+        404,
+        ErrorCodes.RENTAL_INQUIRY_NOT_FOUND,
+      );
+    }
+
+    return inquiry;
+  }
+
+  static async updateAdminInquiryStatus(
+    id: RentalInquiryParams['id'],
+    input: UpdateRentalInquiryStatusInput,
+  ) {
+    await this.getAdminInquiryById(id);
+
+    return prisma.rentalInquiry.update({
+      where: { id },
+      data: { status: input.status },
+      select: adminInquirySelect,
+    });
+  }
+
   static async createAdminListing(input: AdminCreateListingInput) {
     await this.validateListingReferences(input.compoundId, input.ownerId, input.unitId);
 
@@ -1062,6 +1189,26 @@ export class RentalService {
     return where;
   }
 
+  private static buildAdminInquiryWhere(query: RentalInquiryQuery) {
+    const where: Prisma.RentalInquiryWhereInput = {};
+
+    if (query.search) {
+      where.OR = [
+        { tenantName: { contains: query.search, mode: 'insensitive' } },
+        { tenantPhone: { contains: query.search, mode: 'insensitive' } },
+        { tenantEmail: { contains: query.search, mode: 'insensitive' } },
+        { message: { contains: query.search, mode: 'insensitive' } },
+        { listing: { title: { contains: query.search, mode: 'insensitive' } } },
+      ];
+    }
+
+    if (query.listingId) where.listingId = query.listingId;
+    if (query.compoundId) where.compoundId = query.compoundId;
+    if (query.status) where.status = query.status;
+
+    return where;
+  }
+
   private static applyListingFilters(
     where: Prisma.RentalListingWhereInput,
     query: RentalListQuery,
@@ -1106,6 +1253,43 @@ export class RentalService {
         'Rental listing is not available',
         409,
         ErrorCodes.RENTAL_LISTING_NOT_AVAILABLE,
+      );
+    }
+
+    return listing;
+  }
+
+  private static async getAvailableListingForInquiry(id: string) {
+    const listing = await prisma.rentalListing.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        compoundId: true,
+        status: true,
+        isPublished: true,
+        expiresAt: true,
+      },
+    });
+
+    if (!listing) {
+      throw new AppError(
+        'Rental listing not found',
+        404,
+        ErrorCodes.RENTAL_LISTING_NOT_FOUND,
+      );
+    }
+
+    const isExpired = listing.expiresAt !== null && listing.expiresAt <= new Date();
+
+    if (
+      listing.status !== RentalListingStatus.ACTIVE ||
+      !listing.isPublished ||
+      isExpired
+    ) {
+      throw new AppError(
+        'Rental listing is not available for inquiries',
+        409,
+        ErrorCodes.RENTAL_INQUIRY_LISTING_UNAVAILABLE,
       );
     }
 

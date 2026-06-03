@@ -6,13 +6,17 @@ import {
   adminRentalListQuerySchema,
   adminUpdateListingSchema,
   contactAccessQuerySchema,
+  createRentalInquirySchema,
   createRentalOwnerSchema,
+  rentalInquiryParamsSchema,
+  rentalInquiryQuerySchema,
   rentalOwnerParamsSchema,
   rentalOwnerQuerySchema,
   rentalIdParamsSchema,
   rentalListQuerySchema,
   rentalSlugParamsSchema,
   tenantPaymentRequestSchema,
+  updateRentalInquiryStatusSchema,
   updateRentalOwnerSchema,
 } from './rental.schema.js';
 
@@ -28,6 +32,12 @@ router.get(
   '/listings/:slug',
   validate({ params: rentalSlugParamsSchema }),
   RentalController.getPublicListingBySlug,
+);
+
+router.post(
+  '/listings/:id/inquiries',
+  validate({ params: rentalIdParamsSchema, body: createRentalInquirySchema }),
+  RentalController.createRentalInquiry,
 );
 
 router.post(
@@ -91,6 +101,24 @@ router.patch(
   '/admin/owners/:id/deactivate',
   validate({ params: rentalOwnerParamsSchema }),
   RentalController.deactivateRentalOwner,
+);
+
+router.get(
+  '/admin/inquiries',
+  validate({ query: rentalInquiryQuerySchema }),
+  RentalController.listAdminInquiries,
+);
+
+router.get(
+  '/admin/inquiries/:id',
+  validate({ params: rentalInquiryParamsSchema }),
+  RentalController.getAdminInquiryById,
+);
+
+router.patch(
+  '/admin/inquiries/:id/status',
+  validate({ params: rentalInquiryParamsSchema, body: updateRentalInquiryStatusSchema }),
+  RentalController.updateAdminInquiryStatus,
 );
 
 router.get(

@@ -161,6 +161,7 @@ Base path: `/api/v1/rentals`
 Public:
 - `GET /listings`
 - `GET /listings/:slug`
+- `POST /listings/:id/inquiries`
 - `POST /listings/:id/contact-unlock`
 - `GET /listings/:id/contact-access?tenantPhone=...`
 - `POST /listings/:id/reservations`
@@ -180,6 +181,9 @@ Admin-like endpoints:
 - `PATCH /admin/listings/:id`
 - `PATCH /admin/listings/:id/publish`
 - `PATCH /admin/listings/:id/unpublish`
+- `GET /admin/inquiries`
+- `GET /admin/inquiries/:id`
+- `PATCH /admin/inquiries/:id/status`
 - `PATCH /admin/reservations/:id/confirm`
 - `PATCH /admin/reservations/:id/cancel`
 - `POST /admin/maintenance/expire-reservations`
@@ -187,6 +191,40 @@ Admin-like endpoints:
 Admin rental routes are intentionally left without strict role middleware until Phase A3 introduces a clear admin role guard.
 
 Owner deactivation uses `status=SUSPENDED`; `RentalOwnerStatus` does not include an `INACTIVE` enum value.
+
+### Rental Inquiry / Viewing Requests
+
+Visitors can submit a non-payment inquiry or viewing request without unlocking owner contact:
+
+```http
+POST /api/v1/rentals/listings/:id/inquiries
+Content-Type: application/json
+
+{
+  "tenantName": "Ahmed Test",
+  "tenantPhone": "+201555555555",
+  "tenantEmail": "ahmed.test@example.com",
+  "message": "أرغب في معاينة الشقة المتاحة في كمباوند السبحي.",
+  "inquiryType": "VIEWING_REQUEST"
+}
+```
+
+`inquiryType=VIEWING_REQUEST` stores `status=VIEWING_REQUESTED`; `GENERAL` or an omitted type stores `status=NEW`. The public response returns only the inquiry `id` and `status`. It does not return owner contact, create a payment, or mark contact access as unlocked.
+
+Admin review endpoints:
+
+```http
+GET /api/v1/rentals/admin/inquiries?page=1&limit=10&status=NEW
+GET /api/v1/rentals/admin/inquiries/:id
+PATCH /api/v1/rentals/admin/inquiries/:id/status
+Content-Type: application/json
+
+{
+  "status": "CLOSED"
+}
+```
+
+Allowed inquiry statuses are the existing `RentalInquiryStatus` values: `NEW`, `CONTACT_UNLOCKED`, `VIEWING_REQUESTED`, `CLOSED`, and `CANCELLED`.
 
 ### Paymob Environment
 

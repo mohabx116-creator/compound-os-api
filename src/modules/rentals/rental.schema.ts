@@ -32,6 +32,14 @@ const tenantPhoneSchema = z
 const listingTypeSchema = z.enum(['APARTMENT', 'VILLA', 'STUDIO', 'DUPLEX', 'OFFICE', 'SHOP']);
 const furnishingStatusSchema = z.enum(['UNFURNISHED', 'SEMI_FURNISHED', 'FURNISHED']);
 const rentalOwnerStatusSchema = z.enum(['PENDING_REVIEW', 'ACTIVE', 'SUSPENDED', 'REJECTED']);
+const rentalInquiryStatusSchema = z.enum([
+  'NEW',
+  'CONTACT_UNLOCKED',
+  'VIEWING_REQUESTED',
+  'CLOSED',
+  'CANCELLED',
+]);
+const rentalInquiryTypeSchema = z.enum(['VIEWING_REQUEST', 'GENERAL']);
 const listingStatusSchema = z.enum([
   'DRAFT',
   'PENDING_PAYMENT',
@@ -107,6 +115,35 @@ export const tenantPaymentRequestSchema = z
 export const contactAccessQuerySchema = z.object({
   tenantPhone: tenantPhoneSchema,
 });
+
+export const createRentalInquirySchema = z
+  .object({
+    tenantName: z.string().trim().min(1, 'Tenant name is required').max(150),
+    tenantPhone: tenantPhoneSchema,
+    tenantEmail: optionalEmail,
+    message: optionalText(2000),
+    inquiryType: rentalInquiryTypeSchema.optional(),
+  })
+  .strict();
+
+export const rentalInquiryQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(10),
+  search: optionalSearch,
+  listingId: z.string().uuid('Invalid listing id').optional(),
+  compoundId: z.string().uuid('Invalid compound id').optional(),
+  status: rentalInquiryStatusSchema.optional(),
+});
+
+export const rentalInquiryParamsSchema = z.object({
+  id: z.string().uuid('Invalid inquiry id'),
+});
+
+export const updateRentalInquiryStatusSchema = z
+  .object({
+    status: rentalInquiryStatusSchema,
+  })
+  .strict();
 
 const listingImageSchema = z
   .object({
