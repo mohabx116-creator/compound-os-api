@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { validate } from '../../common/middlewares/validate.middleware.js';
+import { requireAdminRole, requireAuth } from '../auth/auth.middleware.js';
 import { RentalController } from './rental.controller.js';
 import {
   adminCreateListingSchema,
@@ -21,6 +22,7 @@ import {
 } from './rental.schema.js';
 
 const router = Router();
+const requireRentalAdmin = [requireAuth, requireAdminRole] as const;
 
 router.get(
   '/listings',
@@ -66,111 +68,128 @@ router.get(
 
 router.post('/payments/paymob/webhook', RentalController.handlePaymobWebhook);
 
-// TODO Phase A3: protect admin rental routes with ADMIN/MANAGER role middleware.
 router.get(
   '/admin/owners',
+  ...requireRentalAdmin,
   validate({ query: rentalOwnerQuerySchema }),
   RentalController.listRentalOwners,
 );
 
 router.get(
   '/admin/owners/:id',
+  ...requireRentalAdmin,
   validate({ params: rentalOwnerParamsSchema }),
   RentalController.getRentalOwnerById,
 );
 
 router.post(
   '/admin/owners',
+  ...requireRentalAdmin,
   validate({ body: createRentalOwnerSchema }),
   RentalController.createRentalOwner,
 );
 
 router.patch(
   '/admin/owners/:id',
+  ...requireRentalAdmin,
   validate({ params: rentalOwnerParamsSchema, body: updateRentalOwnerSchema }),
   RentalController.updateRentalOwner,
 );
 
 router.patch(
   '/admin/owners/:id/activate',
+  ...requireRentalAdmin,
   validate({ params: rentalOwnerParamsSchema }),
   RentalController.activateRentalOwner,
 );
 
 router.patch(
   '/admin/owners/:id/deactivate',
+  ...requireRentalAdmin,
   validate({ params: rentalOwnerParamsSchema }),
   RentalController.deactivateRentalOwner,
 );
 
 router.get(
   '/admin/inquiries',
+  ...requireRentalAdmin,
   validate({ query: rentalInquiryQuerySchema }),
   RentalController.listAdminInquiries,
 );
 
 router.get(
   '/admin/inquiries/:id',
+  ...requireRentalAdmin,
   validate({ params: rentalInquiryParamsSchema }),
   RentalController.getAdminInquiryById,
 );
 
 router.patch(
   '/admin/inquiries/:id/status',
+  ...requireRentalAdmin,
   validate({ params: rentalInquiryParamsSchema, body: updateRentalInquiryStatusSchema }),
   RentalController.updateAdminInquiryStatus,
 );
 
 router.get(
   '/admin/listings',
+  ...requireRentalAdmin,
   validate({ query: adminRentalListQuerySchema }),
   RentalController.listAdminListings,
 );
 
 router.get(
   '/admin/listings/:id',
+  ...requireRentalAdmin,
   validate({ params: rentalIdParamsSchema }),
   RentalController.getAdminListingById,
 );
 
 router.post(
   '/admin/listings',
+  ...requireRentalAdmin,
   validate({ body: adminCreateListingSchema }),
   RentalController.createAdminListing,
 );
 
 router.patch(
   '/admin/listings/:id',
+  ...requireRentalAdmin,
   validate({ params: rentalIdParamsSchema, body: adminUpdateListingSchema }),
   RentalController.updateAdminListing,
 );
 
 router.patch(
   '/admin/listings/:id/publish',
+  ...requireRentalAdmin,
   validate({ params: rentalIdParamsSchema }),
   RentalController.publishAdminListing,
 );
 
 router.patch(
   '/admin/listings/:id/unpublish',
+  ...requireRentalAdmin,
   validate({ params: rentalIdParamsSchema }),
   RentalController.unpublishAdminListing,
 );
 
 router.patch(
   '/admin/reservations/:id/confirm',
+  ...requireRentalAdmin,
   validate({ params: rentalIdParamsSchema }),
   RentalController.confirmReservation,
 );
 
 router.patch(
   '/admin/reservations/:id/cancel',
+  ...requireRentalAdmin,
   validate({ params: rentalIdParamsSchema }),
   RentalController.cancelReservation,
 );
 
 router.post(
   '/admin/maintenance/expire-reservations',
+  ...requireRentalAdmin,
   RentalController.expireStaleReservations,
 );
 

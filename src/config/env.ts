@@ -14,9 +14,21 @@ const optionalEnvUrl = z.preprocess(
   z.string().url().optional(),
 );
 
+const commaSeparatedOrigins = z.preprocess((value) => {
+  if (typeof value !== 'string') {
+    return [];
+  }
+
+  return value
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}, z.array(z.string().url()));
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']),
   PORT: z.coerce.number().default(4000),
+  CORS_ORIGINS: commaSeparatedOrigins.default([]),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL must not be empty'),
   PASSWORD_SALT_ROUNDS: z.coerce.number().int().min(10).max(15).default(12),
   JWT_SECRET: z.preprocess(

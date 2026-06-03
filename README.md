@@ -72,9 +72,11 @@ Auth phases define these variables:
 PASSWORD_SALT_ROUNDS=12
 JWT_SECRET="CHANGE_ME_TO_A_LONG_RANDOM_SECRET"
 JWT_EXPIRES_IN="7d"
+CORS_ORIGINS="http://localhost:5173,https://compound-os-web.vercel.app,https://compound-os-admin.vercel.app"
 ```
 
 `JWT_SECRET` must be a long random secret before login/JWT issuing can succeed. Do not use the placeholder value in production.
+`CORS_ORIGINS` is a comma-separated allowlist. In development, localhost Vite/preview origins are also allowed automatically. In production, set the exact public web and admin dashboard origins, for example `https://sebahicompound.com`, `https://www.sebahicompound.com`, and `https://admin.sebahicompound.com`.
 
 ---
 
@@ -129,6 +131,7 @@ Under the **Settings** panel, configure the build and run pipelines:
 Under the **Environment** tab, add the following variables:
 - `NODE_ENV`: `production`
 - `PORT`: `10000` (Render allocates ports automatically, but setting this aligns validations)
+- `CORS_ORIGINS`: comma-separated frontend/admin allowed origins
 - `DATABASE_URL`: Set this to the Supabase connection string recommended for **Prisma/server runtime** from the Supabase Connect panel.
 
 ---
@@ -168,7 +171,7 @@ Public:
 - `GET /reservations/:id`
 - `POST /payments/paymob/webhook`
 
-Admin-like endpoints:
+Admin endpoints require `Authorization: Bearer ACCESS_TOKEN` for an admin role (`ADMIN`, `MANAGER`, `ACCOUNTANT`, `SECURITY`, or `MAINTENANCE`):
 - `GET /admin/owners`
 - `GET /admin/owners/:id`
 - `POST /admin/owners`
@@ -188,7 +191,7 @@ Admin-like endpoints:
 - `PATCH /admin/reservations/:id/cancel`
 - `POST /admin/maintenance/expire-reservations`
 
-Admin rental routes are intentionally left without strict role middleware until Phase A3 introduces a clear admin role guard.
+Unauthenticated admin requests return `401`. Authenticated non-admin requests return `403`.
 
 Owner deactivation uses `status=SUSPENDED`; `RentalOwnerStatus` does not include an `INACTIVE` enum value.
 
@@ -215,8 +218,13 @@ Admin review endpoints:
 
 ```http
 GET /api/v1/rentals/admin/inquiries?page=1&limit=10&status=NEW
+Authorization: Bearer ADMIN_ACCESS_TOKEN
+
 GET /api/v1/rentals/admin/inquiries/:id
+Authorization: Bearer ADMIN_ACCESS_TOKEN
+
 PATCH /api/v1/rentals/admin/inquiries/:id/status
+Authorization: Bearer ADMIN_ACCESS_TOKEN
 Content-Type: application/json
 
 {
@@ -259,14 +267,15 @@ npm run prisma:migrate -- --name add_rental_marketplace_core
 
 ## Auth Foundation Status
 
-Phase A2 adds backend login and JWT issuing while leaving existing CRUD routes unprotected until Phase A3.
+The backend issues JWT access tokens and protects internal route groups while keeping public health, auth, and rental marketplace discovery routes open.
 
 Current auth status:
 - Resident login is available at `POST /api/v1/auth/resident/login`.
 - Admin login is available at `POST /api/v1/auth/admin/login`.
 - Authenticated user lookup is available at `GET /api/v1/auth/me`.
-- Existing CRUD routes are still not protected yet.
-- Frontend apps still use their current mock sessions.
+- Rental public listing, inquiry, contact-access, payment-initiation, reservation status, and Paymob webhook routes remain public by design.
+- Rental `/admin/*` routes require an authenticated admin role.
+- `/compounds/*`, `/units/*`, `/residents/*`, and `/complaints/*` require an authenticated JWT.
 
 Auth module readiness can be checked with:
 

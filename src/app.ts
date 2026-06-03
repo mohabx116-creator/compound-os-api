@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import { corsOptions } from './config/cors.js';
 import { env } from './config/env.js';
 import { apiRoutes } from './routes/index.js';
 import { notFoundMiddleware } from './common/middlewares/not-found.middleware.js';
@@ -13,7 +14,7 @@ const app = express();
 app.use(helmet());
 
 // Enable Cross-Origin Resource Sharing
-app.use(cors());
+app.use(cors(corsOptions));
 
 // Parse incoming request JSON and URL-encoded bodies with limits
 app.use(express.json({

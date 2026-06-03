@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { AppError } from '../../common/errors/AppError.js';
 import { ErrorCodes } from '../../common/errors/error-codes.js';
+import { ADMIN_ROLES } from './auth.constants.js';
 import { verifyAccessToken } from './jwt.service.js';
 
 export function requireAuth(req: Request, _res: Response, next: NextFunction): void {
@@ -25,3 +26,23 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
     next(error);
   }
 }
+
+export function requireRoles(allowedRoles: readonly string[]) {
+  const allowedRoleSet = new Set(allowedRoles);
+
+  return (req: Request, _res: Response, next: NextFunction): void => {
+    if (!req.auth) {
+      next(new AppError('Authentication required', 401, ErrorCodes.UNAUTHORIZED));
+      return;
+    }
+
+    if (!allowedRoleSet.has(req.auth.role)) {
+      next(new AppError('Forbidden', 403, ErrorCodes.FORBIDDEN));
+      return;
+    }
+
+    next();
+  };
+}
+
+export const requireAdminRole = requireRoles(ADMIN_ROLES);
