@@ -65,6 +65,8 @@ export interface AdminCreateListingInput {
   ownerId: string;
   unitId?: string;
   title: string;
+  slug?: string;
+  isFeatured?: boolean;
   description: string;
   listingType: RentalListingType;
   furnishingStatus: RentalFurnishingStatus;

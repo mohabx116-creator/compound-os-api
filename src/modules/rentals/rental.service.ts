@@ -729,7 +729,28 @@ export class RentalService {
   static async createAdminListing(input: AdminCreateListingInput) {
     await this.validateListingReferences(input.compoundId, input.ownerId, input.unitId);
 
-    const slug = await this.createUniqueSlug(input.title);
+    let slug: string;
+    if (input.slug) {
+      const cleanSlug = input.slug.trim().toLowerCase();
+      if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(cleanSlug)) {
+        throw new AppError(
+          'Invalid slug format. Slug must contain only lowercase letters, numbers, and single hyphens.',
+          400,
+          ErrorCodes.RENTAL_LISTING_INVALID_SLUG,
+        );
+      }
+      const existingListing = await prisma.rentalListing.findUnique({ where: { slug: cleanSlug } });
+      if (existingListing) {
+        throw new AppError(
+          'Rental listing slug already exists',
+          409,
+          ErrorCodes.RENTAL_LISTING_SLUG_CONFLICT,
+        );
+      }
+      slug = cleanSlug;
+    } else {
+      slug = await this.createUniqueSlug(input.title);
+    }
 
     return prisma.rentalListing.create({
       data: {
@@ -754,14 +775,22 @@ export class RentalService {
         addressText: input.addressText,
         locationText: input.locationText,
         status: RentalListingStatus.PENDING_REVIEW,
+        isFeatured: input.isFeatured ?? false,
         images: input.images?.length
           ? {
-              create: input.images.map((image, index) => ({
-                url: image.url,
-                altText: image.altText,
-                sortOrder: image.sortOrder ?? index,
-                isCover: image.isCover ?? index === 0,
-              })),
+              create: (() => {
+                const preprocessed = [...input.images];
+                let coverIndex = preprocessed.findIndex((img) => img.isCover);
+                if (coverIndex === -1) {
+                  coverIndex = 0;
+                }
+                return preprocessed.map((image, index) => ({
+                  url: image.url,
+                  altText: image.altText,
+                  sortOrder: image.sortOrder ?? index,
+                  isCover: index === coverIndex,
+                }));
+              })(),
             }
           : undefined,
       },
@@ -780,6 +809,29 @@ export class RentalService {
       );
     }
 
+    let slug: string | undefined;
+    if (input.slug !== undefined) {
+      const cleanSlug = input.slug.trim().toLowerCase();
+      if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(cleanSlug)) {
+        throw new AppError(
+          'Invalid slug format. Slug must contain only lowercase letters, numbers, and single hyphens.',
+          400,
+          ErrorCodes.RENTAL_LISTING_INVALID_SLUG,
+        );
+      }
+      if (cleanSlug !== existing.slug) {
+        const existingListing = await prisma.rentalListing.findUnique({ where: { slug: cleanSlug } });
+        if (existingListing) {
+          throw new AppError(
+            'Rental listing slug already exists',
+            409,
+            ErrorCodes.RENTAL_LISTING_SLUG_CONFLICT,
+          );
+        }
+      }
+      slug = cleanSlug;
+    }
+
     return prisma.$transaction(async (tx) => {
       if (input.images) {
         await tx.rentalListingImage.deleteMany({ where: { listingId: id } });
@@ -791,6 +843,8 @@ export class RentalService {
           ownerId: input.ownerId,
           unitId: input.unitId,
           title: input.title,
+          slug,
+          isFeatured: input.isFeatured,
           description: input.description,
           listingType: input.listingType,
           furnishingStatus: input.furnishingStatus,
@@ -807,12 +861,19 @@ export class RentalService {
           locationText: input.locationText,
           images: input.images
             ? {
-                create: input.images.map((image, index) => ({
-                  url: image.url,
-                  altText: image.altText,
-                  sortOrder: image.sortOrder ?? index,
-                  isCover: image.isCover ?? index === 0,
-                })),
+                create: (() => {
+                  const preprocessed = [...input.images];
+                  let coverIndex = preprocessed.findIndex((img) => img.isCover);
+                  if (coverIndex === -1 && preprocessed.length > 0) {
+                    coverIndex = 0;
+                  }
+                  return preprocessed.map((image, index) => ({
+                    url: image.url,
+                    altText: image.altText,
+                    sortOrder: image.sortOrder ?? index,
+                    isCover: index === coverIndex,
+                  }));
+                })(),
               }
             : undefined,
         },
@@ -1170,7 +1231,7 @@ export class RentalService {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '');
 
-    return slug || `rental-listing-${Date.now()}`;
+    return slug || `sebahi-rental-${Date.now()}`;
   }
 
   private static normalizePhone(phone: string) {

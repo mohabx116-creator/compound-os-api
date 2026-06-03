@@ -123,6 +123,13 @@ export const adminCreateListingSchema = z
     ownerId: z.string().uuid('Invalid owner id'),
     unitId: z.string().uuid('Invalid unit id').optional(),
     title: z.string().trim().min(3).max(180),
+    slug: z
+      .string()
+      .trim()
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Invalid slug format. Slug must contain only lowercase alphanumeric characters and single hyphens, starting and ending with alphanumeric characters.')
+      .max(160)
+      .optional(),
+    isFeatured: z.boolean().optional(),
     description: z.string().trim().min(10).max(5000),
     listingType: listingTypeSchema,
     furnishingStatus: furnishingStatusSchema,

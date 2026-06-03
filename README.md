@@ -559,3 +559,38 @@ DELETE /api/v1/complaints/{id}
 ```
 
 Closes the complaint using `status=CLOSED` instead of hard deleting historical complaint data. Repeating delete for an already closed complaint returns `200` with a clear message.
+
+---
+
+## R4A — Rental Listing Content Backend Hardening
+
+In this phase, we hardened the rental listing content and metadata contracts to support professional content management, search engine optimization (SEO), and featured showcases.
+
+### 1. Manual & Fallback Slug Support
+- Admin users can optionally provide a custom `slug` when creating or updating a rental listing.
+- The `slug` must consist only of lowercase alphanumeric characters and single hyphens (e.g. `premium-apartment-in-sebahi`), validated with the regex: `^[a-z0-9]+(?:-[a-z0-9]+)*$`.
+- If a custom slug conflicts with an existing listing, the API returns a `409 Conflict` error with code `RENTAL_LISTING_SLUG_CONFLICT`.
+- If the slug is not provided, the backend automatically generates a unique slug:
+  - If the title contains English-safe characters, it is slugified normally.
+  - If the title is Arabic-only (or results in an empty slug), it automatically falls back to `sebahi-rental-{timestamp}`.
+  - A unique suffix (e.g. `-2`, `-3`) is appended in case of conflicts to guarantee uniqueness.
+
+### 2. isFeatured Showcase Status
+- Listings now support the `isFeatured` boolean flag.
+- The flag can be set by the admin during creation or update.
+- Public search results are ordered by `isFeatured DESC` first, ensuring featured listings are highlighted at the top, and support filtering by `featured=true` or `featured=false`.
+
+### 3. Listing Images Contract
+- Admin creation accepts an optional array of `images` representing listing photos.
+- Admin updates allow replacing the full image set transactionally (if `images` is provided, otherwise the image set is left unchanged).
+- Preprocessing guarantees that there is **at most one cover image** (`isCover=true`). If multiple are marked as cover, only the first is kept as cover. If none are marked, the first image is default-marked as cover.
+- In both public and admin responses, listing images are ordered by `isCover DESC`, `sortOrder ASC`, and `createdAt ASC`.
+- Files are not uploaded in this phase; images are referenced via URLs.
+
+### 4. Public API Response Security
+- Public listing endpoints (e.g. `GET /listings` and `GET /listings/:slug`) do not expose sensitive owner contacts (`owner.phone`, `owner.email`, `owner.nationalId`, `owner.whatsapp`).
+- Access to owner contact is only unlocked upon a verified contact-unlock payment.
+
+### 5. Amenities & Currency Status
+- **Amenities / Features**: Amenities are not supported in the database schema in this phase. Implementing them will require a dedicated database schema and migration phase in the future.
+- **Currency**: Platform currency is EGP by platform policy, aligned with the database records.
