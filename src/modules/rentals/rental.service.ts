@@ -4,10 +4,12 @@ import {
   RentalInquiryStatus,
   RentalListingStatus,
   RentalOwnerStatus,
+  RentalOwnerSubmissionStatus,
   RentalPaymentPurpose,
   RentalPaymentStatus,
   RentalReservationStatus,
 } from '@prisma/client';
+import crypto from 'crypto';
 import { AppError } from '../../common/errors/AppError.js';
 import { ErrorCodes } from '../../common/errors/error-codes.js';
 import {
@@ -15,6 +17,7 @@ import {
   getPrismaPagination,
 } from '../../common/utils/pagination.js';
 import { prisma } from '../../config/prisma.js';
+import { env } from '../../config/env.js';
 import { PaymobService } from './paymob.service.js';
 import {
   addDays,
@@ -25,20 +28,27 @@ import type {
   AdminCreateListingInput,
   AdminRentalListQuery,
   AdminUpdateListingInput,
+  CloudinaryUploadSignatureInput,
   ContactAccessQuery,
   CreateRentalOwnerInput,
   CreateRentalInquiryInput,
+  CreateOwnerSubmissionInput,
   RentalIdParams,
   RentalInquiryParams,
   RentalInquiryQuery,
   RentalListQuery,
+  OwnerSubmissionParams,
+  OwnerSubmissionQuery,
   RentalOwnerParams,
   RentalOwnerQuery,
   RentalSlugParams,
   TenantPaymentRequestInput,
+  UpdateOwnerSubmissionStatusInput,
   UpdateRentalInquiryStatusInput,
   UpdateRentalOwnerInput,
 } from './rental.types.js';
+
+const DEFAULT_OWNER_SUBMISSION_COMPOUND_CODE = 'black-horse';
 
 const publicListingSelect = {
   id: true,
@@ -215,6 +225,74 @@ const adminInquirySelect = {
   },
 } satisfies Prisma.RentalInquirySelect;
 
+const publicOwnerSubmissionStatusSelect = {
+  id: true,
+  status: true,
+  title: true,
+  createdListingId: true,
+  createdAt: true,
+  updatedAt: true,
+  createdListing: {
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      status: true,
+      isPublished: true,
+    },
+  },
+} satisfies Prisma.RentalOwnerSubmissionSelect;
+
+const adminOwnerSubmissionSelect = {
+  id: true,
+  compoundId: true,
+  ownerName: true,
+  ownerPhone: true,
+  ownerEmail: true,
+  ownerNationalId: true,
+  preferredContactMethod: true,
+  listingType: true,
+  title: true,
+  description: true,
+  addressText: true,
+  locationText: true,
+  floor: true,
+  areaSqm: true,
+  bedrooms: true,
+  bathrooms: true,
+  furnishingStatus: true,
+  monthlyRent: true,
+  depositAmount: true,
+  status: true,
+  adminNotes: true,
+  rejectionReason: true,
+  createdListingId: true,
+  policyAcceptedAt: true,
+  createdAt: true,
+  updatedAt: true,
+  compound: {
+    select: {
+      id: true,
+      name: true,
+      code: true,
+      address: true,
+      isActive: true,
+    },
+  },
+  createdListing: {
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      status: true,
+      isPublished: true,
+    },
+  },
+  images: {
+    orderBy: [{ isCover: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
+  },
+} satisfies Prisma.RentalOwnerSubmissionSelect;
+
 const activeReservationStatuses: RentalReservationStatus[] = [
   RentalReservationStatus.PAYMENT_LOCKED,
   RentalReservationStatus.PAID_PENDING_CONFIRMATION,
@@ -233,6 +311,281 @@ const confirmableReservationStatuses: RentalReservationStatus[] = [
 ];
 
 export class RentalService {
+  static createCloudinaryUploadSignature(input: CloudinaryUploadSignatureInput = {}) {
+    if (
+      !env.CLOUDINARY_CLOUD_NAME ||
+      !env.CLOUDINARY_API_KEY ||
+      !env.CLOUDINARY_API_SECRET
+    ) {
+      throw new AppError(
+        'Cloudinary image upload is not configured',
+        503,
+        ErrorCodes.SERVICE_UNAVAILABLE,
+      );
+    }
+
+    const timestamp = Math.floor(Date.now() / 1000);
+    const folder = input.folder?.trim() || env.CLOUDINARY_UPLOAD_FOLDER || 'sebahi-owner-submissions';
+    const paramsToSign = `folder=${folder}&timestamp=${timestamp}${env.CLOUDINARY_API_SECRET}`;
+    const signature = crypto.createHash('sha1').update(paramsToSign).digest('hex');
+
+    return {
+      cloudName: env.CLOUDINARY_CLOUD_NAME,
+      uploadUrl: `https://api.cloudinary.com/v1_1/${env.CLOUDINARY_CLOUD_NAME}/image/upload`,
+      fields: {
+        api_key: env.CLOUDINARY_API_KEY,
+        folder,
+        timestamp,
+        signature,
+      },
+    };
+  }
+
+  static async createOwnerSubmission(input: CreateOwnerSubmissionInput) {
+    const compound = await prisma.compound.findFirst({
+      where: {
+        code: DEFAULT_OWNER_SUBMISSION_COMPOUND_CODE,
+        isActive: true,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!compound) {
+      throw new AppError(
+        'Rental compound is not configured for public owner submissions',
+        503,
+        ErrorCodes.SERVICE_UNAVAILABLE,
+      );
+    }
+
+    const images = this.normalizeSubmissionImages(input.images);
+
+    return prisma.rentalOwnerSubmission.create({
+      data: {
+        compoundId: compound.id,
+        ownerName: input.ownerName.trim(),
+        ownerPhone: this.normalizePhone(input.ownerPhone),
+        ownerEmail: input.ownerEmail?.trim() || undefined,
+        ownerNationalId: input.ownerNationalId?.trim() || undefined,
+        preferredContactMethod: input.preferredContactMethod?.trim() || undefined,
+        listingType: input.listingType,
+        title: input.title.trim(),
+        description: input.description.trim(),
+        addressText: input.addressText?.trim() || undefined,
+        locationText: input.locationText?.trim() || undefined,
+        floor: input.floor ?? undefined,
+        areaSqm: input.areaSqm,
+        bedrooms: input.bedrooms,
+        bathrooms: input.bathrooms,
+        furnishingStatus: input.furnishingStatus,
+        monthlyRent: input.monthlyRent,
+        depositAmount: input.depositAmount,
+        policyAcceptedAt: new Date(),
+        status: RentalOwnerSubmissionStatus.NEW,
+        images: {
+          create: images,
+        },
+      },
+      select: publicOwnerSubmissionStatusSelect,
+    });
+  }
+
+  static async getOwnerSubmissionStatus(id: OwnerSubmissionParams['id']) {
+    const submission = await prisma.rentalOwnerSubmission.findUnique({
+      where: { id },
+      select: publicOwnerSubmissionStatusSelect,
+    });
+
+    if (!submission) {
+      throw new AppError(
+        'Owner submission not found',
+        404,
+        ErrorCodes.NOT_FOUND,
+      );
+    }
+
+    return submission;
+  }
+
+  static async listAdminOwnerSubmissions(query: OwnerSubmissionQuery) {
+    const where = this.buildAdminOwnerSubmissionWhere(query);
+
+    const [totalCount, submissions] = await prisma.$transaction([
+      prisma.rentalOwnerSubmission.count({ where }),
+      prisma.rentalOwnerSubmission.findMany({
+        where,
+        ...getPrismaPagination(query),
+        select: adminOwnerSubmissionSelect,
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    return {
+      submissions,
+      meta: getPaginationMeta(query, totalCount),
+    };
+  }
+
+  static async getAdminOwnerSubmissionById(id: OwnerSubmissionParams['id']) {
+    const submission = await prisma.rentalOwnerSubmission.findUnique({
+      where: { id },
+      select: adminOwnerSubmissionSelect,
+    });
+
+    if (!submission) {
+      throw new AppError(
+        'Owner submission not found',
+        404,
+        ErrorCodes.NOT_FOUND,
+      );
+    }
+
+    return submission;
+  }
+
+  static async updateAdminOwnerSubmissionStatus(
+    id: OwnerSubmissionParams['id'],
+    input: UpdateOwnerSubmissionStatusInput,
+  ) {
+    await this.getAdminOwnerSubmissionById(id);
+
+    return prisma.rentalOwnerSubmission.update({
+      where: { id },
+      data: {
+        status: input.status,
+        adminNotes: input.adminNotes,
+        rejectionReason: input.rejectionReason,
+      },
+      select: adminOwnerSubmissionSelect,
+    });
+  }
+
+  static async convertOwnerSubmissionToListing(id: OwnerSubmissionParams['id']) {
+    const submission = await prisma.rentalOwnerSubmission.findUnique({
+      where: { id },
+      include: {
+        images: {
+          orderBy: [{ isCover: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
+        },
+      },
+    });
+
+    if (!submission) {
+      throw new AppError(
+        'Owner submission not found',
+        404,
+        ErrorCodes.NOT_FOUND,
+      );
+    }
+
+    if (submission.createdListingId || submission.status === RentalOwnerSubmissionStatus.CONVERTED_TO_LISTING) {
+      throw new AppError(
+        'Owner submission was already converted to a listing',
+        409,
+        ErrorCodes.CONFLICT,
+      );
+    }
+
+    if (submission.status !== RentalOwnerSubmissionStatus.APPROVED) {
+      throw new AppError(
+        'Owner submission must be approved before conversion',
+        409,
+        ErrorCodes.CONFLICT,
+      );
+    }
+
+    if (submission.areaSqm === null || submission.bedrooms === null || submission.bathrooms === null) {
+      throw new AppError(
+        'Submission is missing required listing dimensions or room counts',
+        409,
+        ErrorCodes.CONFLICT,
+      );
+    }
+
+    const areaSqm = submission.areaSqm;
+
+    return prisma.$transaction(async (tx) => {
+      const owner = await tx.rentalOwner.upsert({
+        where: {
+          compoundId_phone: {
+            compoundId: submission.compoundId,
+            phone: submission.ownerPhone,
+          },
+        },
+        create: {
+          compoundId: submission.compoundId,
+          fullName: submission.ownerName,
+          phone: submission.ownerPhone,
+          email: submission.ownerEmail,
+          nationalId: submission.ownerNationalId,
+          status: RentalOwnerStatus.ACTIVE,
+        },
+        update: {
+          fullName: submission.ownerName,
+          email: submission.ownerEmail,
+          nationalId: submission.ownerNationalId,
+          status: RentalOwnerStatus.ACTIVE,
+        },
+      });
+
+      const slug = await this.createUniqueSlugInTransaction(tx, submission.title);
+      const preprocessedImages = this.normalizeSubmissionImages(submission.images);
+
+      const listing = await tx.rentalListing.create({
+        data: {
+          compoundId: submission.compoundId,
+          ownerId: owner.id,
+          title: submission.title,
+          slug,
+          description: submission.description,
+          listingType: submission.listingType,
+          furnishingStatus: submission.furnishingStatus,
+          bedrooms: submission.bedrooms ?? 0,
+          bathrooms: submission.bathrooms ?? 0,
+          areaSqm,
+          floor: submission.floor,
+          monthlyRent: submission.monthlyRent,
+          depositAmount: submission.depositAmount,
+          contactUnlockFee: RENTAL_POLICY.tenantContactUnlockFee,
+          reservationFee: RENTAL_POLICY.reservationHoldFee,
+          platformCommissionRate: RENTAL_POLICY.platformCommissionRate,
+          addressText: submission.addressText,
+          locationText: submission.locationText,
+          status: RentalListingStatus.PENDING_REVIEW,
+          isPublished: false,
+          isFeatured: false,
+          images: preprocessedImages.length
+            ? {
+                create: preprocessedImages.map((image) => ({
+                  url: image.url,
+                  altText: image.altText,
+                  sortOrder: image.sortOrder,
+                  isCover: image.isCover,
+                })),
+              }
+            : undefined,
+        },
+        include: adminListingInclude,
+      });
+
+      const updatedSubmission = await tx.rentalOwnerSubmission.update({
+        where: { id: submission.id },
+        data: {
+          status: RentalOwnerSubmissionStatus.CONVERTED_TO_LISTING,
+          createdListingId: listing.id,
+        },
+        select: adminOwnerSubmissionSelect,
+      });
+
+      return {
+        submission: updatedSubmission,
+        listing,
+      };
+    });
+  }
+
   static async listRentalOwners(query: RentalOwnerQuery) {
     const where = this.buildRentalOwnerWhere(query);
 
@@ -1209,6 +1562,27 @@ export class RentalService {
     return where;
   }
 
+  private static buildAdminOwnerSubmissionWhere(query: OwnerSubmissionQuery) {
+    const where: Prisma.RentalOwnerSubmissionWhereInput = {};
+
+    if (query.search) {
+      where.OR = [
+        { ownerName: { contains: query.search, mode: 'insensitive' } },
+        { ownerPhone: { contains: query.search, mode: 'insensitive' } },
+        { ownerEmail: { contains: query.search, mode: 'insensitive' } },
+        { title: { contains: query.search, mode: 'insensitive' } },
+        { description: { contains: query.search, mode: 'insensitive' } },
+        { addressText: { contains: query.search, mode: 'insensitive' } },
+        { locationText: { contains: query.search, mode: 'insensitive' } },
+      ];
+    }
+
+    if (query.compoundId) where.compoundId = query.compoundId;
+    if (query.status) where.status = query.status;
+
+    return where;
+  }
+
   private static applyListingFilters(
     where: Prisma.RentalListingWhereInput,
     query: RentalListQuery,
@@ -1406,6 +1780,48 @@ export class RentalService {
     }
 
     return slug;
+  }
+
+  private static async createUniqueSlugInTransaction(
+    tx: Prisma.TransactionClient,
+    title: string,
+  ) {
+    const baseSlug = this.slugify(title);
+    let slug = baseSlug;
+    let suffix = 2;
+
+    while (await tx.rentalListing.findUnique({ where: { slug } })) {
+      slug = `${baseSlug}-${suffix}`;
+      suffix += 1;
+    }
+
+    return slug;
+  }
+
+  private static normalizeSubmissionImages(
+    images: Array<{
+      url: string;
+      publicId?: string | null;
+      storagePath?: string | null;
+      altText?: string | null;
+      sortOrder?: number | null;
+      isCover?: boolean | null;
+    }>,
+  ) {
+    const preprocessed = [...images];
+    let coverIndex = preprocessed.findIndex((image) => image.isCover);
+    if (coverIndex === -1) {
+      coverIndex = 0;
+    }
+
+    return preprocessed.map((image, index) => ({
+      url: image.url,
+      publicId: image.publicId || undefined,
+      storagePath: image.storagePath || undefined,
+      altText: image.altText || undefined,
+      sortOrder: image.sortOrder ?? index,
+      isCover: index === coverIndex,
+    }));
   }
 
   private static slugify(value: string) {

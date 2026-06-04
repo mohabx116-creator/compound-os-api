@@ -128,6 +128,16 @@ enum RentalOwnerStatus {
   REJECTED
 }
 
+enum RentalOwnerSubmissionStatus {
+  NEW
+  UNDER_REVIEW
+  NEEDS_CHANGES
+  APPROVED
+  REJECTED
+  CONVERTED_TO_LISTING
+  CANCELLED
+}
+
 enum PaymentProvider {
   PAYMOB
 }
@@ -156,6 +166,7 @@ model Compound {
   rentalReservations RentalReservation[]
   rentalPayments    RentalPayment[]
   rentalLedgerEntries RentalPlatformLedgerEntry[]
+  rentalOwnerSubmissions RentalOwnerSubmission[]
 
   @@index([isActive])
   @@map("compounds")
@@ -307,6 +318,7 @@ model RentalListing {
   reservations   RentalReservation[]
   payments       RentalPayment[]
   ledgerEntries  RentalPlatformLedgerEntry[]
+  createdFromOwnerSubmission RentalOwnerSubmission?
 
   @@unique([slug])
   @@index([compoundId])
@@ -319,6 +331,63 @@ model RentalListing {
   @@index([monthlyRent])
   @@index([createdAt])
   @@map("rental_listings")
+}
+
+model RentalOwnerSubmission {
+  id                     String                      @id @default(uuid())
+  compoundId             String                      @map("compound_id")
+  compound               Compound                    @relation(fields: [compoundId], references: [id], onDelete: Cascade)
+  ownerName              String                      @map("owner_name")
+  ownerPhone             String                      @map("owner_phone")
+  ownerEmail             String?                     @map("owner_email")
+  ownerNationalId        String?                     @map("owner_national_id")
+  preferredContactMethod String?                     @map("preferred_contact_method")
+  listingType            RentalListingType           @map("listing_type")
+  title                  String
+  description            String
+  addressText            String?                     @map("address_text")
+  locationText           String?                     @map("location_text")
+  floor                  Int?
+  areaSqm                Decimal?                    @map("area_sqm") @db.Decimal(10, 2)
+  bedrooms               Int?
+  bathrooms              Int?
+  furnishingStatus       RentalFurnishingStatus      @map("furnishing_status")
+  monthlyRent            Decimal                     @map("monthly_rent") @db.Decimal(12, 2)
+  depositAmount          Decimal?                    @map("deposit_amount") @db.Decimal(12, 2)
+  status                 RentalOwnerSubmissionStatus @default(NEW)
+  adminNotes             String?                     @map("admin_notes")
+  rejectionReason        String?                     @map("rejection_reason")
+  createdListingId       String?                     @unique @map("created_listing_id")
+  createdListing         RentalListing?              @relation(fields: [createdListingId], references: [id], onDelete: SetNull)
+  policyAcceptedAt       DateTime                    @map("policy_accepted_at")
+  createdAt              DateTime                    @default(now()) @map("created_at")
+  updatedAt              DateTime                    @updatedAt @map("updated_at")
+
+  images RentalOwnerSubmissionImage[]
+
+  @@index([compoundId])
+  @@index([ownerPhone])
+  @@index([status])
+  @@index([createdAt])
+  @@map("rental_owner_submissions")
+}
+
+model RentalOwnerSubmissionImage {
+  id          String                @id @default(uuid())
+  submissionId String               @map("submission_id")
+  submission   RentalOwnerSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  url         String
+  publicId    String?               @map("public_id")
+  storagePath String?               @map("storage_path")
+  altText     String?               @map("alt_text")
+  sortOrder   Int                   @default(0) @map("sort_order")
+  isCover     Boolean               @default(false) @map("is_cover")
+  createdAt   DateTime              @default(now()) @map("created_at")
+
+  @@index([submissionId])
+  @@index([isCover])
+  @@index([sortOrder])
+  @@map("rental_owner_submission_images")
 }
 
 model RentalListingImage {

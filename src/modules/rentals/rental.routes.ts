@@ -6,9 +6,13 @@ import {
   adminCreateListingSchema,
   adminRentalListQuerySchema,
   adminUpdateListingSchema,
+  cloudinaryUploadSignatureSchema,
   contactAccessQuerySchema,
+  createOwnerSubmissionSchema,
   createRentalInquirySchema,
   createRentalOwnerSchema,
+  ownerSubmissionParamsSchema,
+  ownerSubmissionQuerySchema,
   rentalInquiryParamsSchema,
   rentalInquiryQuerySchema,
   rentalOwnerParamsSchema,
@@ -17,12 +21,31 @@ import {
   rentalListQuerySchema,
   rentalSlugParamsSchema,
   tenantPaymentRequestSchema,
+  updateOwnerSubmissionStatusSchema,
   updateRentalInquiryStatusSchema,
   updateRentalOwnerSchema,
 } from './rental.schema.js';
 
 const router = Router();
 const requireRentalAdmin = [requireAuth, requireAdminRole] as const;
+
+router.post(
+  '/owner-submissions/upload-signature',
+  validate({ body: cloudinaryUploadSignatureSchema }),
+  RentalController.createCloudinaryUploadSignature,
+);
+
+router.post(
+  '/owner-submissions',
+  validate({ body: createOwnerSubmissionSchema }),
+  RentalController.createOwnerSubmission,
+);
+
+router.get(
+  '/owner-submissions/:id/status',
+  validate({ params: ownerSubmissionParamsSchema }),
+  RentalController.getOwnerSubmissionStatus,
+);
 
 router.get(
   '/listings',
@@ -122,6 +145,34 @@ router.get(
   ...requireRentalAdmin,
   validate({ params: rentalInquiryParamsSchema }),
   RentalController.getAdminInquiryById,
+);
+
+router.get(
+  '/admin/owner-submissions',
+  ...requireRentalAdmin,
+  validate({ query: ownerSubmissionQuerySchema }),
+  RentalController.listAdminOwnerSubmissions,
+);
+
+router.get(
+  '/admin/owner-submissions/:id',
+  ...requireRentalAdmin,
+  validate({ params: ownerSubmissionParamsSchema }),
+  RentalController.getAdminOwnerSubmissionById,
+);
+
+router.patch(
+  '/admin/owner-submissions/:id/status',
+  ...requireRentalAdmin,
+  validate({ params: ownerSubmissionParamsSchema, body: updateOwnerSubmissionStatusSchema }),
+  RentalController.updateAdminOwnerSubmissionStatus,
+);
+
+router.post(
+  '/admin/owner-submissions/:id/convert-to-listing',
+  ...requireRentalAdmin,
+  validate({ params: ownerSubmissionParamsSchema }),
+  RentalController.convertAdminOwnerSubmissionToListing,
 );
 
 router.patch(

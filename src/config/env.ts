@@ -48,6 +48,10 @@ const envSchema = z.object({
   PAYMOB_CALLBACK_URL: optionalEnvUrl,
   PAYMOB_WEBHOOK_SECRET: optionalEnvString,
   PUBLIC_RENTAL_BASE_URL: optionalEnvUrl,
+  CLOUDINARY_CLOUD_NAME: optionalEnvString,
+  CLOUDINARY_API_KEY: optionalEnvString,
+  CLOUDINARY_API_SECRET: optionalEnvString,
+  CLOUDINARY_UPLOAD_FOLDER: optionalEnvString,
 });
 
 const parsed = envSchema.safeParse(process.env);

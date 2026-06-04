@@ -32,6 +32,15 @@ const tenantPhoneSchema = z
 const listingTypeSchema = z.enum(['APARTMENT', 'VILLA', 'STUDIO', 'DUPLEX', 'OFFICE', 'SHOP']);
 const furnishingStatusSchema = z.enum(['UNFURNISHED', 'SEMI_FURNISHED', 'FURNISHED']);
 const rentalOwnerStatusSchema = z.enum(['PENDING_REVIEW', 'ACTIVE', 'SUSPENDED', 'REJECTED']);
+const ownerSubmissionStatusSchema = z.enum([
+  'NEW',
+  'UNDER_REVIEW',
+  'NEEDS_CHANGES',
+  'APPROVED',
+  'REJECTED',
+  'CONVERTED_TO_LISTING',
+  'CANCELLED',
+]);
 const rentalInquiryStatusSchema = z.enum([
   'NEW',
   'CONTACT_UNLOCKED',
@@ -148,9 +157,75 @@ export const updateRentalInquiryStatusSchema = z
 const listingImageSchema = z
   .object({
     url: z.string().trim().url('Invalid image URL'),
+    publicId: optionalText(300),
+    storagePath: optionalText(500),
     altText: optionalText(200),
     sortOrder: z.number().int().min(0).optional(),
     isCover: z.boolean().optional(),
+  })
+  .strict();
+
+const publicOwnerSubmissionImageSchema = listingImageSchema
+  .extend({
+    publicId: optionalText(300),
+    storagePath: optionalText(500),
+  })
+  .strict();
+
+const policyAcceptedSchema = z.preprocess((value) => {
+  if (value === 'true' || value === true) return true;
+  return value;
+}, z.literal(true, {
+  errorMap: () => ({ message: 'Refund policy and publishing terms must be accepted' }),
+}));
+
+export const cloudinaryUploadSignatureSchema = z
+  .object({
+    folder: optionalText(200),
+  })
+  .strict();
+
+export const createOwnerSubmissionSchema = z
+  .object({
+    ownerName: z.string().trim().min(2, 'Owner name is required').max(150),
+    ownerPhone: z.string().trim().min(5, 'Owner phone is required').max(30),
+    ownerEmail: optionalEmail,
+    ownerNationalId: optionalText(50),
+    preferredContactMethod: optionalText(40),
+    listingType: listingTypeSchema,
+    title: z.string().trim().min(3).max(180),
+    description: z.string().trim().min(10).max(5000),
+    addressText: optionalText(500),
+    locationText: optionalText(500),
+    floor: z.number().int().nullable().optional(),
+    areaSqm: z.number().positive().max(100000).optional(),
+    bedrooms: z.number().int().min(0).max(20).optional(),
+    bathrooms: z.number().int().min(0).max(20).optional(),
+    furnishingStatus: furnishingStatusSchema,
+    monthlyRent: z.number().positive().max(100000000),
+    depositAmount: z.number().nonnegative().max(100000000).optional(),
+    images: z.array(publicOwnerSubmissionImageSchema).min(1, 'At least one image is required').max(20),
+    policyAccepted: policyAcceptedSchema,
+  })
+  .strict();
+
+export const ownerSubmissionQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(10),
+  search: optionalSearch,
+  compoundId: z.string().uuid('Invalid compound id').optional(),
+  status: ownerSubmissionStatusSchema.optional(),
+});
+
+export const ownerSubmissionParamsSchema = z.object({
+  id: z.string().uuid('Invalid owner submission id'),
+});
+
+export const updateOwnerSubmissionStatusSchema = z
+  .object({
+    status: ownerSubmissionStatusSchema,
+    adminNotes: optionalText(2000),
+    rejectionReason: optionalText(1000),
   })
   .strict();
 

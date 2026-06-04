@@ -4,6 +4,7 @@ import type {
   RentalListingStatus,
   RentalListingType,
   RentalOwnerStatus,
+  RentalOwnerSubmissionStatus,
 } from '@prisma/client';
 
 export interface RentalListQuery {
@@ -54,6 +55,18 @@ export interface ContactAccessQuery {
   tenantPhone: string;
 }
 
+export interface OwnerSubmissionQuery {
+  page: number;
+  limit: number;
+  search?: string;
+  compoundId?: string;
+  status?: RentalOwnerSubmissionStatus;
+}
+
+export interface OwnerSubmissionParams {
+  id: string;
+}
+
 export type RentalInquiryType = 'VIEWING_REQUEST' | 'GENERAL';
 
 export interface CreateRentalInquiryInput {
@@ -83,9 +96,43 @@ export interface UpdateRentalInquiryStatusInput {
 
 export interface AdminListingImageInput {
   url: string;
+  publicId?: string;
+  storagePath?: string;
   altText?: string;
   sortOrder?: number;
   isCover?: boolean;
+}
+
+export interface CreateOwnerSubmissionInput {
+  ownerName: string;
+  ownerPhone: string;
+  ownerEmail?: string;
+  ownerNationalId?: string;
+  preferredContactMethod?: string;
+  listingType: RentalListingType;
+  title: string;
+  description: string;
+  addressText?: string;
+  locationText?: string;
+  floor?: number | null;
+  areaSqm?: number;
+  bedrooms?: number;
+  bathrooms?: number;
+  furnishingStatus: RentalFurnishingStatus;
+  monthlyRent: number;
+  depositAmount?: number;
+  images: AdminListingImageInput[];
+  policyAccepted: true;
+}
+
+export interface UpdateOwnerSubmissionStatusInput {
+  status: RentalOwnerSubmissionStatus;
+  adminNotes?: string;
+  rejectionReason?: string;
+}
+
+export interface CloudinaryUploadSignatureInput {
+  folder?: string;
 }
 
 export interface AdminCreateListingInput {

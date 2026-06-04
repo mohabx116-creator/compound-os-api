@@ -7,22 +7,113 @@ import type {
   AdminCreateListingInput,
   AdminRentalListQuery,
   AdminUpdateListingInput,
+  CloudinaryUploadSignatureInput,
   ContactAccessQuery,
   CreateRentalOwnerInput,
   CreateRentalInquiryInput,
+  CreateOwnerSubmissionInput,
   RentalIdParams,
   RentalInquiryParams,
   RentalInquiryQuery,
   RentalListQuery,
+  OwnerSubmissionParams,
+  OwnerSubmissionQuery,
   RentalOwnerParams,
   RentalOwnerQuery,
   RentalSlugParams,
   TenantPaymentRequestInput,
+  UpdateOwnerSubmissionStatusInput,
   UpdateRentalInquiryStatusInput,
   UpdateRentalOwnerInput,
 } from './rental.types.js';
 
 export class RentalController {
+  static createCloudinaryUploadSignature = asyncHandler(async (req: Request, res: Response) => {
+    const result = RentalService.createCloudinaryUploadSignature(
+      req.body as CloudinaryUploadSignatureInput,
+    );
+
+    successResponse({
+      res,
+      message: 'Cloudinary upload signature created successfully',
+      data: result,
+    });
+  });
+
+  static createOwnerSubmission = asyncHandler(async (req: Request, res: Response) => {
+    const submission = await RentalService.createOwnerSubmission(
+      req.body as CreateOwnerSubmissionInput,
+    );
+
+    successResponse({
+      res,
+      statusCode: 201,
+      message: 'Owner listing submission created successfully',
+      data: submission,
+    });
+  });
+
+  static getOwnerSubmissionStatus = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params as unknown as OwnerSubmissionParams;
+    const submission = await RentalService.getOwnerSubmissionStatus(id);
+
+    successResponse({
+      res,
+      message: 'Owner listing submission status retrieved successfully',
+      data: submission,
+    });
+  });
+
+  static listAdminOwnerSubmissions = asyncHandler(async (req: Request, res: Response) => {
+    const result = await RentalService.listAdminOwnerSubmissions(
+      req.query as unknown as OwnerSubmissionQuery,
+    );
+
+    successResponse({
+      res,
+      message: 'Owner listing submissions retrieved successfully',
+      data: result.submissions,
+      meta: result.meta,
+    });
+  });
+
+  static getAdminOwnerSubmissionById = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params as unknown as OwnerSubmissionParams;
+    const submission = await RentalService.getAdminOwnerSubmissionById(id);
+
+    successResponse({
+      res,
+      message: 'Owner listing submission retrieved successfully',
+      data: submission,
+    });
+  });
+
+  static updateAdminOwnerSubmissionStatus = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params as unknown as OwnerSubmissionParams;
+    const submission = await RentalService.updateAdminOwnerSubmissionStatus(
+      id,
+      req.body as UpdateOwnerSubmissionStatusInput,
+    );
+
+    successResponse({
+      res,
+      message: 'Owner listing submission status updated successfully',
+      data: submission,
+    });
+  });
+
+  static convertAdminOwnerSubmissionToListing = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params as unknown as OwnerSubmissionParams;
+    const result = await RentalService.convertOwnerSubmissionToListing(id);
+
+    successResponse({
+      res,
+      statusCode: 201,
+      message: 'Owner listing submission converted to draft listing successfully',
+      data: result,
+    });
+  });
+
   static listRentalOwners = asyncHandler(async (req: Request, res: Response) => {
     const result = await RentalService.listRentalOwners(
       req.query as unknown as RentalOwnerQuery,
