@@ -246,10 +246,13 @@ export const updateOwnerSubmissionStatusSchema = z
 
 export const adminCreateListingSchema = z
   .object({
-    compoundId: z.string().uuid('Invalid compound id'),
-    ownerId: z.string().uuid('Invalid owner id'),
+    compoundId: z.string().uuid('Invalid compound id').optional(),
+    ownerId: z.string().uuid('Invalid owner id').optional(),
+    ownerName: z.string().trim().min(2, 'Owner name is required').max(150),
+    ownerPhone: z.string().trim().min(5, 'Owner phone is required').max(30),
+    ownerWhatsapp: z.string().trim().min(5, 'Owner WhatsApp is required').max(30),
     unitId: z.string().uuid('Invalid unit id').optional(),
-    title: z.string().trim().min(3).max(180),
+    title: optionalText(180),
     slug: z
       .string()
       .trim()
@@ -257,15 +260,18 @@ export const adminCreateListingSchema = z
       .max(160)
       .optional(),
     isFeatured: z.boolean().optional(),
-    description: z.string().trim().min(10).max(5000),
-    listingType: listingTypeSchema,
+    description: optionalText(5000),
+    listingType: listingTypeSchema.default('APARTMENT'),
     furnishingStatus: furnishingStatusSchema,
-    bedrooms: z.number().int().min(0).max(20),
-    bathrooms: z.number().int().min(0).max(20),
+    unitCondition: optionalText(80),
+    basics: optionalText(2000),
+    amenities: optionalText(2000),
+    bedrooms: z.number().int().min(0).max(20).default(2),
+    bathrooms: z.number().int().min(0).max(20).default(1),
     areaSqm: z.number().positive().max(100000),
-    floor: z.number().int().nullable().optional(),
+    floor: z.number().int(),
     monthlyRent: z.number().positive().max(100000000),
-    depositAmount: z.number().nonnegative().max(100000000).optional(),
+    depositAmount: z.number().nonnegative().max(100000000),
     contactUnlockFee: z.number().positive().max(1000000).optional(),
     reservationFee: z.number().positive().max(10000000).optional(),
     platformCommissionRate: z.number().nonnegative().max(100).optional(),
@@ -286,6 +292,7 @@ export const createRentalOwnerSchema = z
     residentId: z.string().uuid('Invalid resident id').optional(),
     fullName: z.string().trim().min(2, 'Owner name is required').max(150),
     phone: z.string().trim().min(5, 'Owner phone is required').max(30),
+    whatsappPhone: optionalText(30),
     email: optionalEmail,
     nationalId: optionalText(50),
     status: rentalOwnerStatusSchema.default('ACTIVE'),

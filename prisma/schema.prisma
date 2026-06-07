@@ -263,6 +263,7 @@ model RentalOwner {
   resident   Resident?         @relation(fields: [residentId], references: [id], onDelete: SetNull)
   fullName   String            @map("full_name")
   phone      String
+  whatsappPhone String?        @map("whatsapp_phone")
   email      String?
   nationalId String?           @map("national_id")
   status     RentalOwnerStatus @default(PENDING_REVIEW)

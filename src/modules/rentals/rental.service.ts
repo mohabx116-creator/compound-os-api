@@ -9,6 +9,7 @@ import {
   RentalPaymentPurpose,
   RentalPaymentStatus,
   RentalReservationStatus,
+  UnitStatus,
 } from '@prisma/client';
 import crypto from 'crypto';
 import { AppError } from '../../common/errors/AppError.js';
@@ -50,7 +51,8 @@ import type {
   UpdateRentalOwnerInput,
 } from './rental.types.js';
 
-const DEFAULT_OWNER_SUBMISSION_COMPOUND_CODE = 'black-horse';
+const DEFAULT_RENTAL_COMPOUND_CODE = 'black-horse';
+const DEFAULT_OWNER_SUBMISSION_COMPOUND_CODE = DEFAULT_RENTAL_COMPOUND_CODE;
 
 const publicListingBaseSelect = {
   id: true,
@@ -159,6 +161,7 @@ const adminOwnerSelect = {
   residentId: true,
   fullName: true,
   phone: true,
+  whatsappPhone: true,
   email: true,
   nationalId: true,
   status: true,
@@ -400,6 +403,29 @@ function buildOwnerSubmissionDescription(input: CreateOwnerSubmissionInput) {
   lines.push(`التأمين: ${input.depositAmount}.`);
   if (input.basics) lines.push(`الأساسيات: ${input.basics.trim()}.`);
   if (input.amenities) lines.push(`المميزات: ${input.amenities.trim()}.`);
+
+  return lines.join('\n');
+}
+
+function buildAdminListingTitle(input: AdminCreateListingInput) {
+  const condition = cleanText(input.unitCondition);
+  return condition
+    ? `شقة ${condition} للإيجار في كمبوند السبحي`
+    : 'شقة للإيجار في كمبوند السبحي';
+}
+
+function buildAdminListingDescription(input: AdminCreateListingInput) {
+  const lines = ['شقة للإيجار في كمبوند السبحي.'];
+
+  if (input.unitCondition) lines.push(`حالة الوحدة: ${input.unitCondition.trim()}.`);
+  lines.push(`المساحة: ${input.areaSqm} م².`);
+  lines.push(`الدور: ${input.floor}.`);
+  lines.push(`عدد الغرف: ${input.bedrooms ?? 2}.`);
+  lines.push(`عدد الحمامات: ${input.bathrooms ?? 1}.`);
+  lines.push(`الإيجار الشهري: ${input.monthlyRent}.`);
+  lines.push(`التأمين: ${input.depositAmount}.`);
+  if (input.basics) lines.push(`الأساسيات: ${input.basics.trim()}.`);
+  if (input.amenities) lines.push(`الكماليات: ${input.amenities.trim()}.`);
 
   return lines.join('\n');
 }
@@ -727,6 +753,7 @@ export class RentalService {
           residentId: data.residentId,
           fullName: data.fullName,
           phone: data.phone,
+          whatsappPhone: data.whatsappPhone,
           email: data.email,
           nationalId: data.nationalId,
           status: data.status ?? RentalOwnerStatus.ACTIVE,
@@ -757,6 +784,7 @@ export class RentalService {
           residentId: data.residentId,
           fullName: data.fullName,
           phone: data.phone,
+          whatsappPhone: data.whatsappPhone,
           email: data.email,
           nationalId: data.nationalId,
           status: data.status,
@@ -1302,7 +1330,12 @@ export class RentalService {
   }
 
   static async createAdminListing(input: AdminCreateListingInput) {
-    await this.validateListingReferences(input.compoundId, input.ownerId, input.unitId);
+    const compound = await this.resolveAdminListingCompound(input.compoundId);
+    const ownerPhone = this.normalizePhone(input.ownerPhone);
+    const ownerWhatsapp = this.normalizePhone(input.ownerWhatsapp);
+    const title = cleanText(input.title) ?? buildAdminListingTitle(input);
+    const description = cleanText(input.description) ?? buildAdminListingDescription(input);
+    const furnishingStatus = deriveFurnishingStatus(input.unitCondition, input.furnishingStatus);
 
     let slug: string;
     if (input.slug) {
@@ -1324,52 +1357,73 @@ export class RentalService {
       }
       slug = cleanSlug;
     } else {
-      slug = await this.createUniqueSlug(input.title);
+      slug = await this.createUniqueSlug(title);
     }
 
-    return prisma.rentalListing.create({
-      data: {
-        compoundId: input.compoundId,
+    return prisma.$transaction(async (tx) => {
+      const owner = await this.resolveAdminListingOwner(tx, {
+        compoundId: compound.id,
         ownerId: input.ownerId,
-        unitId: input.unitId,
-        title: input.title,
-        slug,
-        description: input.description,
-        listingType: input.listingType,
-        furnishingStatus: input.furnishingStatus,
-        bedrooms: input.bedrooms,
-        bathrooms: input.bathrooms,
-        areaSqm: input.areaSqm,
-        floor: input.floor,
-        monthlyRent: input.monthlyRent,
-        depositAmount: input.depositAmount,
-        contactUnlockFee: input.contactUnlockFee ?? RENTAL_POLICY.tenantContactUnlockFee,
-        reservationFee: input.reservationFee ?? RENTAL_POLICY.reservationHoldFee,
-        platformCommissionRate:
-          input.platformCommissionRate ?? RENTAL_POLICY.platformCommissionRate,
-        addressText: input.addressText,
-        locationText: input.locationText,
-        status: RentalListingStatus.PENDING_REVIEW,
-        isFeatured: input.isFeatured ?? false,
-        images: input.images?.length
-          ? {
-              create: (() => {
-                const preprocessed = [...input.images];
-                let coverIndex = preprocessed.findIndex((img) => img.isCover);
-                if (coverIndex === -1) {
-                  coverIndex = 0;
-                }
-                return preprocessed.map((image, index) => ({
-                  url: image.url,
-                  altText: image.altText,
-                  sortOrder: image.sortOrder ?? index,
-                  isCover: index === coverIndex,
-                }));
-              })(),
-            }
-          : undefined,
-      },
-      include: adminListingInclude,
+        ownerName: input.ownerName,
+        ownerPhone,
+        ownerWhatsapp,
+      });
+
+      const unitId = input.unitId
+        ? await this.resolveAdminListingUnit(tx, compound.id, input.unitId)
+        : await this.createAdminListingUnit(tx, {
+            compoundId: compound.id,
+            areaSqm: input.areaSqm,
+            floor: input.floor,
+          });
+
+      return tx.rentalListing.create({
+        data: {
+          compoundId: compound.id,
+          ownerId: owner.id,
+          unitId,
+          title,
+          slug,
+          description,
+          listingType: 'APARTMENT',
+          furnishingStatus,
+          unitCondition: cleanText(input.unitCondition),
+          basics: cleanText(input.basics),
+          amenities: cleanText(input.amenities),
+          bedrooms: 2,
+          bathrooms: 1,
+          areaSqm: input.areaSqm,
+          floor: input.floor,
+          monthlyRent: input.monthlyRent,
+          depositAmount: input.depositAmount,
+          contactUnlockFee: input.contactUnlockFee ?? RENTAL_POLICY.tenantContactUnlockFee,
+          reservationFee: input.reservationFee ?? RENTAL_POLICY.reservationHoldFee,
+          platformCommissionRate:
+            input.platformCommissionRate ?? RENTAL_POLICY.platformCommissionRate,
+          addressText: cleanText(input.addressText),
+          locationText: cleanText(input.locationText),
+          status: RentalListingStatus.PENDING_REVIEW,
+          isFeatured: input.isFeatured ?? false,
+          images: input.images?.length
+            ? {
+                create: (() => {
+                  const preprocessed = [...input.images];
+                  let coverIndex = preprocessed.findIndex((img) => img.isCover);
+                  if (coverIndex === -1) {
+                    coverIndex = 0;
+                  }
+                  return preprocessed.map((image, index) => ({
+                    url: image.url,
+                    altText: image.altText,
+                    sortOrder: image.sortOrder ?? index,
+                    isCover: index === coverIndex,
+                  }));
+                })(),
+              }
+            : undefined,
+        },
+        include: adminListingInclude,
+      });
     });
   }
 
@@ -1412,10 +1466,20 @@ export class RentalService {
         await tx.rentalListingImage.deleteMany({ where: { listingId: id } });
       }
 
+      const owner = input.ownerName && input.ownerPhone && input.ownerWhatsapp
+        ? await this.resolveAdminListingOwner(tx, {
+            compoundId: existing.compoundId,
+            ownerId: input.ownerId,
+            ownerName: input.ownerName,
+            ownerPhone: this.normalizePhone(input.ownerPhone),
+            ownerWhatsapp: this.normalizePhone(input.ownerWhatsapp),
+          })
+        : undefined;
+
       return tx.rentalListing.update({
         where: { id },
         data: {
-          ownerId: input.ownerId,
+          ownerId: owner?.id ?? input.ownerId,
           unitId: input.unitId,
           title: input.title,
           slug,
@@ -1423,6 +1487,9 @@ export class RentalService {
           description: input.description,
           listingType: input.listingType,
           furnishingStatus: input.furnishingStatus,
+          unitCondition: input.unitCondition,
+          basics: input.basics,
+          amenities: input.amenities,
           bedrooms: input.bedrooms,
           bathrooms: input.bathrooms,
           areaSqm: input.areaSqm,
@@ -1799,10 +1866,125 @@ export class RentalService {
       ...input,
       fullName: input.fullName?.trim(),
       phone: input.phone?.trim(),
+      whatsappPhone: input.whatsappPhone?.trim() || undefined,
       email: input.email?.trim() || undefined,
       nationalId: input.nationalId?.trim() || undefined,
       residentId: input.residentId || undefined,
     };
+  }
+
+  private static async resolveAdminListingCompound(compoundId?: string) {
+    const compound = compoundId
+      ? await prisma.compound.findUnique({ where: { id: compoundId } })
+      : await prisma.compound.findFirst({
+          where: {
+            code: DEFAULT_RENTAL_COMPOUND_CODE,
+            isActive: true,
+          },
+        });
+
+    if (!compound || !compound.isActive) {
+      throw new AppError('Active compound not found', 404, ErrorCodes.NOT_FOUND);
+    }
+
+    return compound;
+  }
+
+  private static async resolveAdminListingOwner(
+    tx: Prisma.TransactionClient,
+    input: {
+      compoundId: string;
+      ownerId?: string;
+      ownerName: string;
+      ownerPhone: string;
+      ownerWhatsapp: string;
+    },
+  ) {
+    if (input.ownerId) {
+      const owner = await tx.rentalOwner.findUnique({ where: { id: input.ownerId } });
+      if (!owner || owner.compoundId !== input.compoundId) {
+        throw new AppError('Rental owner not found', 404, ErrorCodes.NOT_FOUND);
+      }
+
+      return tx.rentalOwner.update({
+        where: { id: owner.id },
+        data: {
+          fullName: owner.fullName || input.ownerName.trim(),
+          phone: owner.phone || input.ownerPhone,
+          whatsappPhone: owner.whatsappPhone || input.ownerWhatsapp,
+          status: RentalOwnerStatus.ACTIVE,
+        },
+      });
+    }
+
+    const owner = await tx.rentalOwner.findFirst({
+      where: {
+        compoundId: input.compoundId,
+        OR: [
+          { phone: input.ownerPhone },
+          { phone: input.ownerWhatsapp },
+          { whatsappPhone: input.ownerPhone },
+          { whatsappPhone: input.ownerWhatsapp },
+        ],
+      },
+    });
+
+    if (owner) {
+      return tx.rentalOwner.update({
+        where: { id: owner.id },
+        data: {
+          fullName: owner.fullName || input.ownerName.trim(),
+          whatsappPhone: owner.whatsappPhone || input.ownerWhatsapp,
+          status: RentalOwnerStatus.ACTIVE,
+        },
+      });
+    }
+
+    return tx.rentalOwner.create({
+      data: {
+        compoundId: input.compoundId,
+        fullName: input.ownerName.trim(),
+        phone: input.ownerPhone,
+        whatsappPhone: input.ownerWhatsapp,
+        status: RentalOwnerStatus.ACTIVE,
+      },
+    });
+  }
+
+  private static async resolveAdminListingUnit(
+    tx: Prisma.TransactionClient,
+    compoundId: string,
+    unitId: string,
+  ) {
+    const unit = await tx.unit.findUnique({ where: { id: unitId } });
+    if (!unit || unit.compoundId !== compoundId) {
+      throw new AppError('Unit not found for this compound', 404, ErrorCodes.NOT_FOUND);
+    }
+
+    return unit.id;
+  }
+
+  private static async createAdminListingUnit(
+    tx: Prisma.TransactionClient,
+    input: {
+      compoundId: string;
+      areaSqm: number;
+      floor: number;
+    },
+  ) {
+    const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+    const unit = await tx.unit.create({
+      data: {
+        compoundId: input.compoundId,
+        unitNumber: `rental-${suffix}`,
+        unitType: 'APARTMENT',
+        floor: input.floor,
+        areaSqm: input.areaSqm,
+        status: UnitStatus.VACANT,
+      },
+    });
+
+    return unit.id;
   }
 
   private static async validateRentalOwnerReferences(

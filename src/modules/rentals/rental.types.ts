@@ -140,21 +140,27 @@ export interface CloudinaryUploadSignatureInput {
 }
 
 export interface AdminCreateListingInput {
-  compoundId: string;
-  ownerId: string;
+  compoundId?: string;
+  ownerId?: string;
+  ownerName: string;
+  ownerPhone: string;
+  ownerWhatsapp: string;
   unitId?: string;
-  title: string;
+  title?: string;
   slug?: string;
   isFeatured?: boolean;
-  description: string;
-  listingType: RentalListingType;
+  description?: string;
+  listingType?: RentalListingType;
   furnishingStatus: RentalFurnishingStatus;
-  bedrooms: number;
-  bathrooms: number;
+  unitCondition?: string;
+  basics?: string;
+  amenities?: string;
+  bedrooms?: number;
+  bathrooms?: number;
   areaSqm: number;
-  floor?: number | null;
+  floor: number;
   monthlyRent: number;
-  depositAmount?: number;
+  depositAmount: number;
   contactUnlockFee?: number;
   reservationFee?: number;
   platformCommissionRate?: number;
@@ -164,9 +170,8 @@ export interface AdminCreateListingInput {
 }
 
 export type AdminUpdateListingInput = Partial<
-  Omit<AdminCreateListingInput, 'compoundId' | 'ownerId' | 'images'>
+  Omit<AdminCreateListingInput, 'compoundId' | 'images'>
 > & {
-  ownerId?: string;
   images?: AdminListingImageInput[];
 };
 
@@ -175,6 +180,7 @@ export interface CreateRentalOwnerInput {
   residentId?: string;
   fullName: string;
   phone: string;
+  whatsappPhone?: string;
   email?: string;
   nationalId?: string;
   status?: RentalOwnerStatus;
