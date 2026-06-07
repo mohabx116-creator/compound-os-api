@@ -212,7 +212,7 @@ export const createOwnerSubmissionSchema = z
     furnishingStatus: furnishingStatusSchema,
     monthlyRent: z.number().positive().max(100000000),
     depositAmount: z.number().nonnegative().max(100000000).optional(),
-    images: z.array(publicOwnerSubmissionImageSchema).min(1, 'At least one image is required').max(8),
+    images: z.array(publicOwnerSubmissionImageSchema).min(1, 'At least one image is required').max(12),
     policyAccepted: policyAcceptedSchema,
   })
   .strict();
@@ -264,7 +264,7 @@ export const adminCreateListingSchema = z
     platformCommissionRate: z.number().nonnegative().max(100).optional(),
     addressText: optionalText(500),
     locationText: optionalText(500),
-    images: z.array(listingImageSchema).max(12).optional(),
+    images: z.array(listingImageSchema).max(20).optional(),
   })
   .strict();
 

@@ -330,21 +330,37 @@ const confirmableReservationStatuses: RentalReservationStatus[] = [
   RentalReservationStatus.PAID_PENDING_CONFIRMATION,
 ];
 
+function createCloudinaryUploadSignatureForFolder(folder: string) {
+  if (
+    !env.CLOUDINARY_CLOUD_NAME ||
+    !env.CLOUDINARY_API_KEY ||
+    !env.CLOUDINARY_API_SECRET
+  ) {
+    throw new AppError(
+      'Cloudinary image upload is not configured',
+      503,
+      ErrorCodes.CLOUDINARY_NOT_CONFIGURED,
+    );
+  }
+
+  const timestamp = Math.floor(Date.now() / 1000);
+  const paramsToSign = `folder=${folder}&timestamp=${timestamp}${env.CLOUDINARY_API_SECRET}`;
+  const signature = crypto.createHash('sha1').update(paramsToSign).digest('hex');
+
+  return {
+    cloudName: env.CLOUDINARY_CLOUD_NAME,
+    uploadUrl: `https://api.cloudinary.com/v1_1/${env.CLOUDINARY_CLOUD_NAME}/image/upload`,
+    fields: {
+      api_key: env.CLOUDINARY_API_KEY,
+      folder,
+      timestamp,
+      signature,
+    },
+  };
+}
+
 export class RentalService {
   static createCloudinaryUploadSignature(input: CloudinaryUploadSignatureInput = {}) {
-    if (
-      !env.CLOUDINARY_CLOUD_NAME ||
-      !env.CLOUDINARY_API_KEY ||
-      !env.CLOUDINARY_API_SECRET
-    ) {
-      throw new AppError(
-        'Cloudinary image upload is not configured',
-        503,
-        ErrorCodes.CLOUDINARY_NOT_CONFIGURED,
-      );
-    }
-
-    const timestamp = Math.floor(Date.now() / 1000);
     const configuredFolder =
       env.CLOUDINARY_OWNER_SUBMISSIONS_FOLDER ||
       env.CLOUDINARY_UPLOAD_FOLDER ||
@@ -353,19 +369,14 @@ export class RentalService {
     const folder = requestedFolder?.startsWith(configuredFolder)
       ? requestedFolder
       : configuredFolder;
-    const paramsToSign = `folder=${folder}&timestamp=${timestamp}${env.CLOUDINARY_API_SECRET}`;
-    const signature = crypto.createHash('sha1').update(paramsToSign).digest('hex');
 
-    return {
-      cloudName: env.CLOUDINARY_CLOUD_NAME,
-      uploadUrl: `https://api.cloudinary.com/v1_1/${env.CLOUDINARY_CLOUD_NAME}/image/upload`,
-      fields: {
-        api_key: env.CLOUDINARY_API_KEY,
-        folder,
-        timestamp,
-        signature,
-      },
-    };
+    return createCloudinaryUploadSignatureForFolder(folder);
+  }
+
+  static createAdminListingCloudinaryUploadSignature() {
+    return createCloudinaryUploadSignatureForFolder(
+      env.CLOUDINARY_LISTINGS_FOLDER || 'dalilsubhi/listings',
+    );
   }
 
   static async createOwnerSubmission(input: CreateOwnerSubmissionInput) {

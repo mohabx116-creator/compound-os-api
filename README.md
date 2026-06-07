@@ -157,9 +157,10 @@ CLOUDINARY_CLOUD_NAME=""
 CLOUDINARY_API_KEY=""
 CLOUDINARY_API_SECRET=""
 CLOUDINARY_OWNER_SUBMISSIONS_FOLDER="dalilsubhi/owner-submissions"
+CLOUDINARY_LISTINGS_FOLDER="dalilsubhi/listings"
 ```
 
-Do not commit real environment values. If Cloudinary credentials are missing, owner upload signature requests return a controlled `CLOUDINARY_NOT_CONFIGURED` error.
+Do not commit real environment values. If Cloudinary credentials are missing, owner or admin listing upload signature requests return a controlled `CLOUDINARY_NOT_CONFIGURED` error.
 
 ---
 
@@ -659,7 +660,7 @@ In this phase, we hardened the rental listing content and metadata contracts to 
 - Admin updates allow replacing the full image set transactionally (if `images` is provided, otherwise the image set is left unchanged).
 - Preprocessing guarantees that there is **at most one cover image** (`isCover=true`). If multiple are marked as cover, only the first is kept as cover. If none are marked, the first image is default-marked as cover.
 - In both public and admin responses, listing images are ordered by `isCover DESC`, `sortOrder ASC`, and `createdAt ASC`.
-- Files are not uploaded in this phase; images are referenced via URLs.
+- Admin listing images can be uploaded through signed Cloudinary uploads, while direct image URLs remain accepted as a fallback.
 
 ### 4. Public API Response Security
 - Public listing endpoints (e.g. `GET /listings` and `GET /listings/:slug`) do not expose sensitive owner contacts (`owner.phone`, `owner.email`, `owner.nationalId`, `owner.whatsapp`).

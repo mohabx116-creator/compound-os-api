@@ -40,6 +40,16 @@ export class RentalController {
     });
   });
 
+  static createAdminListingCloudinaryUploadSignature = asyncHandler(async (_req: Request, res: Response) => {
+    const result = RentalService.createAdminListingCloudinaryUploadSignature();
+
+    successResponse({
+      res,
+      message: 'Cloudinary listing upload signature created successfully',
+      data: result,
+    });
+  });
+
   static createOwnerSubmission = asyncHandler(async (req: Request, res: Response) => {
     const submission = await RentalService.createOwnerSubmission(
       req.body as CreateOwnerSubmissionInput,
