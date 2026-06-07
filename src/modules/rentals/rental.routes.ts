@@ -256,6 +256,13 @@ router.patch(
   RentalController.unpublishAdminListing,
 );
 
+router.delete(
+  '/admin/listings/:id',
+  ...requireRentalAdmin,
+  validate({ params: rentalIdParamsSchema }),
+  RentalController.deleteAdminListing,
+);
+
 router.patch(
   '/admin/reservations/:id/confirm',
   ...requireRentalAdmin,

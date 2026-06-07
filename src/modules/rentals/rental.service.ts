@@ -1549,6 +1549,19 @@ export class RentalService {
     });
   }
 
+  static async deleteAdminListing(id: RentalIdParams['id']) {
+    await this.getAdminListingById(id);
+
+    return prisma.rentalListing.update({
+      where: { id },
+      data: {
+        status: RentalListingStatus.REMOVED,
+        isPublished: false,
+      },
+      include: adminListingInclude,
+    });
+  }
+
   static async unpublishAdminListing(id: RentalIdParams['id']) {
     await this.getAdminListingById(id);
 

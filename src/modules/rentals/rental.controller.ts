@@ -387,6 +387,17 @@ export class RentalController {
     });
   });
 
+  static deleteAdminListing = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params as unknown as RentalIdParams;
+    const listing = await RentalService.deleteAdminListing(id);
+
+    successResponse({
+      res,
+      message: 'Rental listing deleted successfully',
+      data: listing,
+    });
+  });
+
   static unpublishAdminListing = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params as unknown as RentalIdParams;
     const listing = await RentalService.unpublishAdminListing(id);
