@@ -256,6 +256,20 @@ router.patch(
   RentalController.unpublishAdminListing,
 );
 
+router.patch(
+  '/admin/listings/:id/mark-available',
+  ...requireRentalAdmin,
+  validate({ params: rentalIdParamsSchema }),
+  RentalController.markAdminListingAvailable,
+);
+
+router.patch(
+  '/admin/listings/:id/mark-rented',
+  ...requireRentalAdmin,
+  validate({ params: rentalIdParamsSchema }),
+  RentalController.markAdminListingRented,
+);
+
 router.delete(
   '/admin/listings/:id',
   ...requireRentalAdmin,

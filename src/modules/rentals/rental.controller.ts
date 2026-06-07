@@ -409,6 +409,28 @@ export class RentalController {
     });
   });
 
+  static markAdminListingAvailable = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params as unknown as RentalIdParams;
+    const listing = await RentalService.markAdminListingAvailable(id);
+
+    successResponse({
+      res,
+      message: 'Rental listing marked available successfully',
+      data: listing,
+    });
+  });
+
+  static markAdminListingRented = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params as unknown as RentalIdParams;
+    const listing = await RentalService.markAdminListingRented(id);
+
+    successResponse({
+      res,
+      message: 'Rental listing marked rented successfully',
+      data: listing,
+    });
+  });
+
   static confirmReservation = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params as unknown as RentalIdParams;
     const result = await RentalService.confirmReservation(id);

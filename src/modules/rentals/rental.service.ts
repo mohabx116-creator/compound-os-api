@@ -863,27 +863,88 @@ export class RentalService {
     listingId: RentalIdParams['id'],
     input: CreateRentalInquiryInput,
   ) {
-    const listing = await this.getAvailableListingForInquiry(listingId);
     const tenantPhone = this.normalizePhone(input.tenantPhone);
     const status =
       input.inquiryType === 'VIEWING_REQUEST'
         ? RentalInquiryStatus.VIEWING_REQUESTED
         : RentalInquiryStatus.NEW;
 
-    const inquiry = await prisma.rentalInquiry.create({
-      data: {
-        listingId: listing.id,
-        compoundId: listing.compoundId,
-        tenantName: input.tenantName,
-        tenantPhone,
-        tenantEmail: input.tenantEmail,
-        message: input.message,
-        status,
-      },
-      select: {
-        id: true,
-        status: true,
-      },
+    const inquiry = await prisma.$transaction(async (tx) => {
+      const listing = await tx.rentalListing.findUnique({
+        where: { id: listingId },
+        select: {
+          id: true,
+          compoundId: true,
+          unitId: true,
+          title: true,
+          slug: true,
+          monthlyRent: true,
+          depositAmount: true,
+          status: true,
+          isPublished: true,
+          expiresAt: true,
+        },
+      });
+
+      if (!listing) {
+        throw new AppError(
+          'Rental listing not found',
+          404,
+          ErrorCodes.RENTAL_LISTING_NOT_FOUND,
+        );
+      }
+
+      const isExpired = listing.expiresAt !== null && listing.expiresAt <= new Date();
+
+      if (
+        listing.status !== RentalListingStatus.ACTIVE ||
+        !listing.isPublished ||
+        isExpired
+      ) {
+        throw new AppError(
+          'Rental listing is not available for inquiries',
+          409,
+          ErrorCodes.RENTAL_INQUIRY_LISTING_UNAVAILABLE,
+        );
+      }
+
+      const reservedListing = await tx.rentalListing.updateMany({
+        where: {
+          id: listingId,
+          status: RentalListingStatus.ACTIVE,
+          isPublished: true,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        },
+        data: {
+          status: RentalListingStatus.RESERVED,
+          isPublished: false,
+          reservedUntil: null,
+        },
+      });
+
+      if (reservedListing.count !== 1) {
+        throw new AppError(
+          'Rental listing is not available for inquiries',
+          409,
+          ErrorCodes.RENTAL_INQUIRY_LISTING_UNAVAILABLE,
+        );
+      }
+
+      return tx.rentalInquiry.create({
+        data: {
+          listingId: listing.id,
+          compoundId: listing.compoundId,
+          tenantName: input.tenantName,
+          tenantPhone,
+          tenantEmail: input.tenantEmail,
+          message: this.buildWhatsAppInquiryMessage(input, tenantPhone, listing),
+          status,
+        },
+        select: {
+          id: true,
+          status: true,
+        },
+      });
     });
 
     return inquiry;
@@ -1575,6 +1636,63 @@ export class RentalService {
     });
   }
 
+  static async markAdminListingAvailable(id: RentalIdParams['id']) {
+    const listing = await this.getAdminListingById(id);
+
+    const availableSourceStatuses: RentalListingStatus[] = [
+      RentalListingStatus.RESERVED,
+      RentalListingStatus.RENTED,
+      RentalListingStatus.SUSPENDED,
+      RentalListingStatus.PAYMENT_LOCKED,
+    ];
+
+    if (!availableSourceStatuses.includes(listing.status)) {
+      throw new AppError(
+        'Rental listing cannot be marked available in its current status',
+        409,
+        ErrorCodes.RENTAL_LISTING_NOT_AVAILABLE,
+      );
+    }
+
+    return prisma.rentalListing.update({
+      where: { id },
+      data: {
+        status: RentalListingStatus.ACTIVE,
+        isPublished: true,
+        reservedUntil: null,
+      },
+      include: adminListingInclude,
+    });
+  }
+
+  static async markAdminListingRented(id: RentalIdParams['id']) {
+    const listing = await this.getAdminListingById(id);
+
+    const rentableSourceStatuses: RentalListingStatus[] = [
+      RentalListingStatus.RESERVED,
+      RentalListingStatus.ACTIVE,
+    ];
+
+    if (!rentableSourceStatuses.includes(listing.status)) {
+      throw new AppError(
+        'Rental listing cannot be marked rented in its current status',
+        409,
+        ErrorCodes.RENTAL_LISTING_NOT_AVAILABLE,
+      );
+    }
+
+    return prisma.rentalListing.update({
+      where: { id },
+      data: {
+        status: RentalListingStatus.RENTED,
+        isPublished: false,
+        reservedUntil: null,
+        rentedAt: new Date(),
+      },
+      include: adminListingInclude,
+    });
+  }
+
   static async confirmReservation(id: RentalIdParams['id']) {
     return prisma.$transaction(async (tx) => {
       const reservation = await tx.rentalReservation.findUnique({
@@ -1812,41 +1930,49 @@ export class RentalService {
     return listing;
   }
 
-  private static async getAvailableListingForInquiry(id: string) {
-    const listing = await prisma.rentalListing.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        compoundId: true,
-        status: true,
-        isPublished: true,
-        expiresAt: true,
-      },
-    });
+  private static buildWhatsAppInquiryMessage(
+    input: CreateRentalInquiryInput,
+    tenantPhone: string,
+    listing: {
+      id: string;
+      title: string;
+      slug: string;
+      unitId: string | null;
+      monthlyRent: Prisma.Decimal;
+      depositAmount: Prisma.Decimal | null;
+    },
+  ) {
+    const lines = [
+      'طلب تواصل واتساب للإيجار',
+      `اسم العميل: ${input.tenantName.trim()}`,
+      `رقم الموبايل: ${tenantPhone}`,
+    ];
 
-    if (!listing) {
-      throw new AppError(
-        'Rental listing not found',
-        404,
-        ErrorCodes.RENTAL_LISTING_NOT_FOUND,
-      );
+    if (input.tenantNationalId) {
+      lines.push(`الرقم القومي: ${input.tenantNationalId}`);
     }
 
-    const isExpired = listing.expiresAt !== null && listing.expiresAt <= new Date();
+    lines.push(
+      `عنوان الإعلان: ${listing.title}`,
+      `معرف الإعلان: ${listing.id}`,
+      `رابط الإعلان: ${listing.slug}`,
+    );
 
-    if (
-      listing.status !== RentalListingStatus.ACTIVE ||
-      !listing.isPublished ||
-      isExpired
-    ) {
-      throw new AppError(
-        'Rental listing is not available for inquiries',
-        409,
-        ErrorCodes.RENTAL_INQUIRY_LISTING_UNAVAILABLE,
-      );
+    if (listing.unitId) {
+      lines.push(`معرف الوحدة: ${listing.unitId}`);
     }
 
-    return listing;
+    lines.push(`الإيجار الشهري: ${listing.monthlyRent.toString()}`);
+
+    if (listing.depositAmount !== null) {
+      lines.push(`مبلغ التأمين: ${listing.depositAmount.toString()}`);
+    }
+
+    if (input.message) {
+      lines.push('', 'رسالة العميل:', input.message.trim());
+    }
+
+    return lines.join('\n');
   }
 
   private static buildRentalOwnerWhere(query: RentalOwnerQuery) {
