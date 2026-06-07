@@ -379,9 +379,9 @@ function deriveFurnishingStatus(
   fallback?: RentalFurnishingStatus,
 ): RentalFurnishingStatus {
   const normalized = condition?.trim();
+  if (normalized === 'سوبر لوكس') return RentalFurnishingStatus.FURNISHED;
   if (normalized === 'مفروشة') return RentalFurnishingStatus.FURNISHED;
-  if (normalized === 'نص فرش') return RentalFurnishingStatus.SEMI_FURNISHED;
-  if (normalized === 'غير مفروشة') return RentalFurnishingStatus.UNFURNISHED;
+  if (normalized === 'فاضية') return RentalFurnishingStatus.UNFURNISHED;
   return fallback ?? RentalFurnishingStatus.UNFURNISHED;
 }
 

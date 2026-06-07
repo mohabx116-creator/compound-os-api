@@ -31,6 +31,10 @@ const tenantPhoneSchema = z
 
 const listingTypeSchema = z.enum(['APARTMENT', 'VILLA', 'STUDIO', 'DUPLEX', 'OFFICE', 'SHOP']);
 const furnishingStatusSchema = z.enum(['UNFURNISHED', 'SEMI_FURNISHED', 'FURNISHED']);
+const unitConditionSchema = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z.enum(['سوبر لوكس', 'مفروشة', 'فاضية']).optional(),
+);
 const rentalOwnerStatusSchema = z.enum(['PENDING_REVIEW', 'ACTIVE', 'SUSPENDED', 'REJECTED']);
 const ownerSubmissionStatusSchema = z.enum([
   'NEW',
@@ -214,7 +218,7 @@ export const createOwnerSubmissionSchema = z
     bedrooms: z.number().int().min(0).max(20).optional(),
     bathrooms: z.number().int().min(0).max(20).default(1),
     furnishingStatus: furnishingStatusSchema.default('UNFURNISHED'),
-    unitCondition: optionalText(80),
+    unitCondition: unitConditionSchema,
     basics: optionalText(2000),
     amenities: optionalText(2000),
     monthlyRent: z.number().positive().max(100000000),
@@ -263,7 +267,7 @@ export const adminCreateListingSchema = z
     description: optionalText(5000),
     listingType: listingTypeSchema.default('APARTMENT'),
     furnishingStatus: furnishingStatusSchema,
-    unitCondition: optionalText(80),
+    unitCondition: unitConditionSchema,
     basics: optionalText(2000),
     amenities: optionalText(2000),
     bedrooms: z.number().int().min(0).max(20).default(2),
