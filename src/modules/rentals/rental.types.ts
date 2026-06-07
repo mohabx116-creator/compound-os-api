@@ -106,21 +106,25 @@ export interface AdminListingImageInput {
 export interface CreateOwnerSubmissionInput {
   ownerName: string;
   ownerPhone: string;
+  ownerWhatsapp: string;
   ownerEmail?: string;
   ownerNationalId?: string;
   preferredContactMethod?: string;
-  listingType: RentalListingType;
-  title: string;
-  description: string;
+  listingType?: RentalListingType;
+  title?: string;
+  description?: string;
   addressText?: string;
   locationText?: string;
   floor?: number | null;
   areaSqm?: number;
   bedrooms?: number;
-  bathrooms?: number;
-  furnishingStatus: RentalFurnishingStatus;
+  bathrooms: number;
+  furnishingStatus?: RentalFurnishingStatus;
+  unitCondition?: string;
+  basics?: string;
+  amenities?: string;
   monthlyRent: number;
-  depositAmount?: number;
+  depositAmount: number;
   images: AdminListingImageInput[];
   policyAccepted: true;
 }

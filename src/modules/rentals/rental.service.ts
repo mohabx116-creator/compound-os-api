@@ -2,6 +2,7 @@ import {
   PaymentProvider,
   Prisma,
   RentalInquiryStatus,
+  RentalFurnishingStatus,
   RentalListingStatus,
   RentalOwnerStatus,
   RentalOwnerSubmissionStatus,
@@ -60,6 +61,9 @@ const publicListingBaseSelect = {
   description: true,
   listingType: true,
   furnishingStatus: true,
+  unitCondition: true,
+  basics: true,
+  amenities: true,
   bedrooms: true,
   bathrooms: true,
   areaSqm: true,
@@ -268,6 +272,7 @@ const adminOwnerSubmissionSelect = {
   compoundId: true,
   ownerName: true,
   ownerPhone: true,
+  ownerWhatsapp: true,
   ownerEmail: true,
   ownerNationalId: true,
   preferredContactMethod: true,
@@ -281,6 +286,9 @@ const adminOwnerSubmissionSelect = {
   bedrooms: true,
   bathrooms: true,
   furnishingStatus: true,
+  unitCondition: true,
+  basics: true,
+  amenities: true,
   monthlyRent: true,
   depositAmount: true,
   status: true,
@@ -359,6 +367,43 @@ function createCloudinaryUploadSignatureForFolder(folder: string) {
   };
 }
 
+function cleanText(value?: string | null) {
+  return value?.trim() || undefined;
+}
+
+function deriveFurnishingStatus(
+  condition?: string,
+  fallback?: RentalFurnishingStatus,
+): RentalFurnishingStatus {
+  const normalized = condition?.trim();
+  if (normalized === 'مفروشة') return RentalFurnishingStatus.FURNISHED;
+  if (normalized === 'نص فرش') return RentalFurnishingStatus.SEMI_FURNISHED;
+  if (normalized === 'غير مفروشة') return RentalFurnishingStatus.UNFURNISHED;
+  return fallback ?? RentalFurnishingStatus.UNFURNISHED;
+}
+
+function buildOwnerSubmissionTitle(input: CreateOwnerSubmissionInput) {
+  const parts = ['شقة للإيجار'];
+  if (input.bedrooms !== undefined) parts.push(`${input.bedrooms} غرف`);
+  if (input.areaSqm !== undefined) parts.push(`${input.areaSqm} م²`);
+  return parts.join(' - ');
+}
+
+function buildOwnerSubmissionDescription(input: CreateOwnerSubmissionInput) {
+  const lines = ['طلب إعلان شقة للإيجار من المالك.'];
+
+  if (input.unitCondition) lines.push(`حالة الوحدة: ${input.unitCondition.trim()}.`);
+  if (input.areaSqm !== undefined) lines.push(`المساحة: ${input.areaSqm} م².`);
+  if (input.bedrooms !== undefined) lines.push(`عدد الغرف: ${input.bedrooms}.`);
+  lines.push(`عدد الحمامات: ${input.bathrooms ?? 1}.`);
+  lines.push(`الإيجار الشهري: ${input.monthlyRent}.`);
+  lines.push(`التأمين: ${input.depositAmount}.`);
+  if (input.basics) lines.push(`الأساسيات: ${input.basics.trim()}.`);
+  if (input.amenities) lines.push(`المميزات: ${input.amenities.trim()}.`);
+
+  return lines.join('\n');
+}
+
 export class RentalService {
   static createCloudinaryUploadSignature(input: CloudinaryUploadSignatureInput = {}) {
     const configuredFolder =
@@ -399,25 +444,33 @@ export class RentalService {
     }
 
     const images = this.normalizeSubmissionImages(input.images);
+    const unitCondition = cleanText(input.unitCondition);
+    const furnishingStatus = deriveFurnishingStatus(unitCondition, input.furnishingStatus);
+    const title = cleanText(input.title) ?? buildOwnerSubmissionTitle(input);
+    const description = cleanText(input.description) ?? buildOwnerSubmissionDescription(input);
 
     return prisma.rentalOwnerSubmission.create({
       data: {
         compoundId: compound.id,
         ownerName: input.ownerName.trim(),
         ownerPhone: this.normalizePhone(input.ownerPhone),
-        ownerEmail: input.ownerEmail?.trim() || undefined,
-        ownerNationalId: input.ownerNationalId?.trim() || undefined,
-        preferredContactMethod: input.preferredContactMethod?.trim() || undefined,
-        listingType: input.listingType,
-        title: input.title.trim(),
-        description: input.description.trim(),
-        addressText: input.addressText?.trim() || undefined,
-        locationText: input.locationText?.trim() || undefined,
+        ownerWhatsapp: this.normalizePhone(input.ownerWhatsapp),
+        ownerEmail: cleanText(input.ownerEmail),
+        ownerNationalId: cleanText(input.ownerNationalId),
+        preferredContactMethod: cleanText(input.preferredContactMethod),
+        listingType: 'APARTMENT',
+        title,
+        description,
+        addressText: cleanText(input.addressText),
+        locationText: cleanText(input.locationText),
         floor: input.floor ?? undefined,
         areaSqm: input.areaSqm,
         bedrooms: input.bedrooms,
-        bathrooms: input.bathrooms,
-        furnishingStatus: input.furnishingStatus,
+        bathrooms: input.bathrooms ?? 1,
+        furnishingStatus,
+        unitCondition,
+        basics: cleanText(input.basics),
+        amenities: cleanText(input.amenities),
         monthlyRent: input.monthlyRent,
         depositAmount: input.depositAmount,
         policyAcceptedAt: new Date(),
@@ -534,7 +587,7 @@ export class RentalService {
       );
     }
 
-    if (submission.areaSqm === null || submission.bedrooms === null || submission.bathrooms === null) {
+    if (submission.areaSqm === null || submission.bedrooms === null) {
       throw new AppError(
         'Submission is missing required listing dimensions or room counts',
         409,
@@ -581,11 +634,14 @@ export class RentalService {
           listingType: submission.listingType,
           furnishingStatus: submission.furnishingStatus,
           bedrooms: submission.bedrooms ?? 0,
-          bathrooms: submission.bathrooms ?? 0,
+          bathrooms: submission.bathrooms ?? 1,
           areaSqm,
           floor: submission.floor,
           monthlyRent: submission.monthlyRent,
           depositAmount: submission.depositAmount,
+          unitCondition: submission.unitCondition,
+          basics: submission.basics,
+          amenities: submission.amenities,
           contactUnlockFee: RENTAL_POLICY.tenantContactUnlockFee,
           reservationFee: RENTAL_POLICY.reservationHoldFee,
           platformCommissionRate: RENTAL_POLICY.platformCommissionRate,
@@ -1608,11 +1664,15 @@ export class RentalService {
       where.OR = [
         { ownerName: { contains: query.search, mode: 'insensitive' } },
         { ownerPhone: { contains: query.search, mode: 'insensitive' } },
+        { ownerWhatsapp: { contains: query.search, mode: 'insensitive' } },
         { ownerEmail: { contains: query.search, mode: 'insensitive' } },
         { title: { contains: query.search, mode: 'insensitive' } },
         { description: { contains: query.search, mode: 'insensitive' } },
         { addressText: { contains: query.search, mode: 'insensitive' } },
         { locationText: { contains: query.search, mode: 'insensitive' } },
+        { unitCondition: { contains: query.search, mode: 'insensitive' } },
+        { basics: { contains: query.search, mode: 'insensitive' } },
+        { amenities: { contains: query.search, mode: 'insensitive' } },
       ];
     }
 

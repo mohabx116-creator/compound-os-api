@@ -291,6 +291,9 @@ model RentalListing {
   description            String
   listingType            RentalListingType      @map("listing_type")
   furnishingStatus       RentalFurnishingStatus @map("furnishing_status")
+  unitCondition          String?                @map("unit_condition")
+  basics                 String?
+  amenities              String?
   bedrooms               Int
   bathrooms              Int
   areaSqm                Decimal                @map("area_sqm") @db.Decimal(10, 2)
@@ -339,6 +342,7 @@ model RentalOwnerSubmission {
   compound               Compound                    @relation(fields: [compoundId], references: [id], onDelete: Cascade)
   ownerName              String                      @map("owner_name")
   ownerPhone             String                      @map("owner_phone")
+  ownerWhatsapp          String?                     @map("owner_whatsapp")
   ownerEmail             String?                     @map("owner_email")
   ownerNationalId        String?                     @map("owner_national_id")
   preferredContactMethod String?                     @map("preferred_contact_method")
@@ -352,6 +356,9 @@ model RentalOwnerSubmission {
   bedrooms               Int?
   bathrooms              Int?
   furnishingStatus       RentalFurnishingStatus      @map("furnishing_status")
+  unitCondition          String?                     @map("unit_condition")
+  basics                 String?
+  amenities              String?
   monthlyRent            Decimal                     @map("monthly_rent") @db.Decimal(12, 2)
   depositAmount          Decimal?                    @map("deposit_amount") @db.Decimal(12, 2)
   status                 RentalOwnerSubmissionStatus @default(NEW)
