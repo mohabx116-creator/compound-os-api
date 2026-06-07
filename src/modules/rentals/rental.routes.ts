@@ -42,15 +42,15 @@ const publicRentalActionLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
 });
 
-const adminRentalUploadLimiter = rateLimit({
-  keyPrefix: 'rentals:admin-upload',
-  max: 60,
+const uploadSignatureRateLimiter = rateLimit({
+  keyPrefix: 'rentals:upload-signature',
+  max: 300,
   windowMs: 15 * 60 * 1000,
 });
 
 router.post(
   '/owner-submissions/upload-signature',
-  publicRentalActionLimiter,
+  uploadSignatureRateLimiter,
   validate({ body: cloudinaryUploadSignatureSchema }),
   RentalController.createCloudinaryUploadSignature,
 );
@@ -217,7 +217,7 @@ router.get(
 router.post(
   '/admin/listings/upload-signature',
   ...requireRentalAdmin,
-  adminRentalUploadLimiter,
+  uploadSignatureRateLimiter,
   RentalController.createAdminListingCloudinaryUploadSignature,
 );
 
