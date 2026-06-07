@@ -235,7 +235,7 @@ Content-Type: application/json
   "tenantName": "Ahmed Test",
   "tenantPhone": "+201555555555",
   "tenantEmail": "ahmed.test@example.com",
-  "message": "أرغب في معاينة الشقة المتاحة في كمباوند السبحي.",
+  "message": "أرغب في معاينة الشقة المتاحة في كمبوند السبحي.",
   "inquiryType": "VIEWING_REQUEST"
 }
 ```
