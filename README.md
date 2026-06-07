@@ -133,6 +133,33 @@ Under the **Environment** tab, add the following variables:
 - `PORT`: `10000` (Render allocates ports automatically, but setting this aligns validations)
 - `CORS_ORIGINS`: comma-separated frontend/admin allowed origins
 - `DATABASE_URL`: Set this to the Supabase connection string recommended for **Prisma/server runtime** from the Supabase Connect panel.
+- `DIRECT_URL`: Set this to the Supabase direct/session connection string used by Prisma migrations.
+- `JWT_SECRET`: Set this to a long random production secret. Do not use placeholder values.
+- `JWT_EXPIRES_IN`: `7d`
+- `CORS_ORIGINS`: Comma-separated browser origins allowed to call the API.
+
+Current production CORS origins before custom subdomains:
+
+```txt
+https://dalilsubhi.com,https://www.dalilsubhi.com,https://dalilsubhi-landing-web.vercel.app,https://sebahi-rental-web.vercel.app,https://compound-os-web.vercel.app,https://compound-os-admin.vercel.app
+```
+
+Final production CORS origins after custom subdomains:
+
+```txt
+https://dalilsubhi.com,https://www.dalilsubhi.com,https://dalilsubhi-landing-web.vercel.app,https://sebahi-rental-web.vercel.app,https://compound-os-web.vercel.app,https://compound-os-admin.vercel.app,https://rentals.dalilsubhi.com,https://app.dalilsubhi.com,https://admin.dalilsubhi.com
+```
+
+Owner submission image uploads require Cloudinary:
+
+```bash
+CLOUDINARY_CLOUD_NAME=""
+CLOUDINARY_API_KEY=""
+CLOUDINARY_API_SECRET=""
+CLOUDINARY_OWNER_SUBMISSIONS_FOLDER="dalilsubhi/owner-submissions"
+```
+
+Do not commit real environment values. If Cloudinary credentials are missing, owner upload signature requests return a controlled `CLOUDINARY_NOT_CONFIGURED` error.
 
 ---
 
