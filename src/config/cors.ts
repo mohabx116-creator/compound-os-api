@@ -46,7 +46,7 @@ export const corsOptions: CorsOptions = {
       return;
     }
 
-    callback(new AppError('Origin is not allowed by CORS policy', 403, ErrorCodes.FORBIDDEN));
+    callback(new AppError('CORS origin is not allowed', 403, ErrorCodes.CORS_ORIGIN_NOT_ALLOWED));
   },
   allowedHeaders: ['Authorization', 'Content-Type'],
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],

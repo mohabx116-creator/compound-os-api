@@ -24,6 +24,7 @@ import {
   addMinutes,
   RENTAL_POLICY,
 } from './rental-policy.js';
+import { withOptimizedRentalImages } from './rental-image-urls.js';
 import type {
   AdminCreateListingInput,
   AdminRentalListQuery,
@@ -50,7 +51,7 @@ import type {
 
 const DEFAULT_OWNER_SUBMISSION_COMPOUND_CODE = 'black-horse';
 
-const publicListingSelect = {
+const publicListingBaseSelect = {
   id: true,
   compoundId: true,
   unitId: true,
@@ -75,16 +76,6 @@ const publicListingSelect = {
   expiresAt: true,
   reservedUntil: true,
   createdAt: true,
-  images: {
-    select: {
-      id: true,
-      url: true,
-      altText: true,
-      sortOrder: true,
-      isCover: true,
-    },
-    orderBy: [{ isCover: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
-  },
   compound: {
     select: {
       id: true,
@@ -102,6 +93,35 @@ const publicListingSelect = {
       floor: true,
       areaSqm: true,
     },
+  },
+} satisfies Prisma.RentalListingSelect;
+
+const publicListingListSelect = {
+  ...publicListingBaseSelect,
+  images: {
+    select: {
+      id: true,
+      url: true,
+      altText: true,
+      sortOrder: true,
+      isCover: true,
+    },
+    orderBy: [{ isCover: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
+    take: 1,
+  },
+} satisfies Prisma.RentalListingSelect;
+
+const publicListingDetailSelect = {
+  ...publicListingBaseSelect,
+  images: {
+    select: {
+      id: true,
+      url: true,
+      altText: true,
+      sortOrder: true,
+      isCover: true,
+    },
+    orderBy: [{ isCover: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
   },
 } satisfies Prisma.RentalListingSelect;
 
@@ -320,12 +340,19 @@ export class RentalService {
       throw new AppError(
         'Cloudinary image upload is not configured',
         503,
-        ErrorCodes.SERVICE_UNAVAILABLE,
+        ErrorCodes.CLOUDINARY_NOT_CONFIGURED,
       );
     }
 
     const timestamp = Math.floor(Date.now() / 1000);
-    const folder = input.folder?.trim() || env.CLOUDINARY_UPLOAD_FOLDER || 'sebahi-owner-submissions';
+    const configuredFolder =
+      env.CLOUDINARY_OWNER_SUBMISSIONS_FOLDER ||
+      env.CLOUDINARY_UPLOAD_FOLDER ||
+      'dalilsubhi/owner-submissions';
+    const requestedFolder = input.folder?.trim();
+    const folder = requestedFolder?.startsWith(configuredFolder)
+      ? requestedFolder
+      : configuredFolder;
     const paramsToSign = `folder=${folder}&timestamp=${timestamp}${env.CLOUDINARY_API_SECRET}`;
     const signature = crypto.createHash('sha1').update(paramsToSign).digest('hex');
 
@@ -402,7 +429,7 @@ export class RentalService {
       throw new AppError(
         'Owner submission not found',
         404,
-        ErrorCodes.NOT_FOUND,
+        ErrorCodes.RENTAL_OWNER_SUBMISSION_NOT_FOUND,
       );
     }
 
@@ -704,13 +731,13 @@ export class RentalService {
       prisma.rentalListing.findMany({
         where,
         ...getPrismaPagination(query),
-        select: publicListingSelect,
+        select: publicListingListSelect,
         orderBy: [{ isFeatured: 'desc' }, { createdAt: 'desc' }],
       }),
     ]);
 
     return {
-      listings,
+      listings: listings.map((listing) => withOptimizedRentalImages(listing)),
       meta: getPaginationMeta(query, totalCount),
     };
   }
@@ -723,7 +750,7 @@ export class RentalService {
         isPublished: true,
         OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
       },
-      select: publicListingSelect,
+      select: publicListingDetailSelect,
     });
 
     if (!listing) {
@@ -734,7 +761,7 @@ export class RentalService {
       );
     }
 
-    return listing;
+    return withOptimizedRentalImages(listing);
   }
 
   static async createRentalInquiry(
@@ -1119,6 +1146,7 @@ export class RentalService {
           owner: true,
           compound: { select: { id: true, name: true, code: true } },
           images: {
+            take: 1,
             orderBy: [{ isCover: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
           },
           _count: {

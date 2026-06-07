@@ -65,7 +65,7 @@ const listingStatusSchema = z.enum([
 
 const rentalListQueryBaseSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(10),
+  limit: z.coerce.number().int().min(1).max(100).default(12),
   search: optionalSearch,
   compoundId: z.string().uuid('Invalid compound id').optional(),
   listingType: listingTypeSchema.optional(),
@@ -76,18 +76,26 @@ const rentalListQueryBaseSchema = z.object({
   featured: optionalBooleanFlag,
 });
 
+const publicRentalListQuerySchema = rentalListQueryBaseSchema.extend({
+  limit: z.coerce.number().int().min(1).default(12),
+});
+
 const rentRangeSchema = (value: { minRent?: number; maxRent?: number }) =>
   value.minRent === undefined ||
   value.maxRent === undefined ||
   value.minRent <= value.maxRent;
 
-export const rentalListQuerySchema = rentalListQueryBaseSchema.refine(
+export const rentalListQuerySchema = publicRentalListQuerySchema.refine(
   rentRangeSchema,
   'minRent must be less than or equal to maxRent',
-);
+).transform((value) => ({
+  ...value,
+  limit: Math.min(value.limit, 24),
+}));
 
 export const adminRentalListQuerySchema = rentalListQueryBaseSchema
   .extend({
+    limit: z.coerce.number().int().min(1).max(100).default(10),
     status: listingStatusSchema.optional(),
     ownerId: z.string().uuid('Invalid owner id').optional(),
   })
@@ -204,7 +212,7 @@ export const createOwnerSubmissionSchema = z
     furnishingStatus: furnishingStatusSchema,
     monthlyRent: z.number().positive().max(100000000),
     depositAmount: z.number().nonnegative().max(100000000).optional(),
-    images: z.array(publicOwnerSubmissionImageSchema).min(1, 'At least one image is required').max(20),
+    images: z.array(publicOwnerSubmissionImageSchema).min(1, 'At least one image is required').max(8),
     policyAccepted: policyAcceptedSchema,
   })
   .strict();
@@ -256,7 +264,7 @@ export const adminCreateListingSchema = z
     platformCommissionRate: z.number().nonnegative().max(100).optional(),
     addressText: optionalText(500),
     locationText: optionalText(500),
-    images: z.array(listingImageSchema).max(20).optional(),
+    images: z.array(listingImageSchema).max(12).optional(),
   })
   .strict();
 

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { rateLimit } from '../../common/middlewares/rate-limit.middleware.js';
 import { validate } from '../../common/middlewares/validate.middleware.js';
 import { requireAdminRole, requireAuth } from '../auth/auth.middleware.js';
 import { RentalController } from './rental.controller.js';
@@ -29,20 +30,35 @@ import {
 const router = Router();
 const requireRentalAdmin = [requireAuth, requireAdminRole] as const;
 
+const publicPaymentInitiationLimiter = rateLimit({
+  keyPrefix: 'rentals:payment-initiation',
+  max: 10,
+  windowMs: 15 * 60 * 1000,
+});
+
+const publicRentalActionLimiter = rateLimit({
+  keyPrefix: 'rentals:public-action',
+  max: 20,
+  windowMs: 15 * 60 * 1000,
+});
+
 router.post(
   '/owner-submissions/upload-signature',
+  publicRentalActionLimiter,
   validate({ body: cloudinaryUploadSignatureSchema }),
   RentalController.createCloudinaryUploadSignature,
 );
 
 router.post(
   '/owner-submissions',
+  publicRentalActionLimiter,
   validate({ body: createOwnerSubmissionSchema }),
   RentalController.createOwnerSubmission,
 );
 
 router.get(
   '/owner-submissions/:id/status',
+  publicRentalActionLimiter,
   validate({ params: ownerSubmissionParamsSchema }),
   RentalController.getOwnerSubmissionStatus,
 );
@@ -61,12 +77,14 @@ router.get(
 
 router.post(
   '/listings/:id/inquiries',
+  publicRentalActionLimiter,
   validate({ params: rentalIdParamsSchema, body: createRentalInquirySchema }),
   RentalController.createRentalInquiry,
 );
 
 router.post(
   '/listings/:id/contact-unlock',
+  publicPaymentInitiationLimiter,
   validate({ params: rentalIdParamsSchema, body: tenantPaymentRequestSchema }),
   RentalController.startContactUnlockPayment,
 );
@@ -79,6 +97,7 @@ router.get(
 
 router.post(
   '/listings/:id/reservations',
+  publicPaymentInitiationLimiter,
   validate({ params: rentalIdParamsSchema, body: tenantPaymentRequestSchema }),
   RentalController.startReservationPayment,
 );

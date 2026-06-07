@@ -52,6 +52,7 @@ const envSchema = z.object({
   CLOUDINARY_API_KEY: optionalEnvString,
   CLOUDINARY_API_SECRET: optionalEnvString,
   CLOUDINARY_UPLOAD_FOLDER: optionalEnvString,
+  CLOUDINARY_OWNER_SUBMISSIONS_FOLDER: optionalEnvString,
 });
 
 const parsed = envSchema.safeParse(process.env);

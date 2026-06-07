@@ -1,0 +1,5 @@
+-- No-op after rebase.
+-- Owner submission schema is provided by:
+-- prisma/migrations/20260604170000_add_rental_owner_submissions/migration.sql
+-- This migration file is kept to preserve the local migration history without
+-- re-creating an enum/table that already exists on origin/main.
