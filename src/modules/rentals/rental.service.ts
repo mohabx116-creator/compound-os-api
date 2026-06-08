@@ -932,26 +932,50 @@ export class RentalService {
         );
       }
 
-      const reservedListing = await tx.rentalListing.updateMany({
-        where: {
-          id: listingId,
-          status: RentalListingStatus.ACTIVE,
-          isPublished: true,
-          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-        },
-        data: {
-          status: RentalListingStatus.RESERVED,
-          isPublished: false,
-          reservedUntil: null,
-        },
-      });
+      // Atomic update using raw SQL conditional increment
+      const updateCount = await tx.$executeRaw`
+        UPDATE rental_listings
+        SET pending_beds = pending_beds + 1
+        WHERE id = ${listingId}
+          AND status = 'ACTIVE'::"RentalListingStatus"
+          AND is_published = true
+          AND (expires_at IS NULL OR expires_at > NOW())
+          AND total_beds > pending_beds + rented_beds
+      `;
 
-      if (reservedListing.count !== 1) {
+      if (updateCount !== 1) {
         throw new AppError(
           'Rental listing is not available for inquiries',
           409,
           ErrorCodes.RENTAL_INQUIRY_LISTING_UNAVAILABLE,
         );
+      }
+
+      // Check if listing has reached 0 available beds to mark it as reserved
+      const updatedListing = await tx.rentalListing.findUnique({
+        where: { id: listingId },
+        select: {
+          totalBeds: true,
+          pendingBeds: true,
+          rentedBeds: true,
+        },
+      });
+
+      if (updatedListing) {
+        const availableBeds = Math.max(
+          updatedListing.totalBeds - updatedListing.pendingBeds - updatedListing.rentedBeds,
+          0
+        );
+        if (availableBeds === 0) {
+          await tx.rentalListing.update({
+            where: { id: listingId },
+            data: {
+              status: RentalListingStatus.RESERVED,
+              isPublished: false,
+              reservedUntil: null,
+            },
+          });
+        }
       }
 
       return tx.rentalInquiry.create({
