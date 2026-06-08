@@ -168,6 +168,7 @@ export interface AdminCreateListingInput {
   addressText?: string;
   locationText?: string;
   images?: AdminListingImageInput[];
+  totalBeds?: number;
 }
 
 export type AdminUpdateListingInput = Partial<

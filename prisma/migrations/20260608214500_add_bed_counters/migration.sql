@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "rental_listings" ADD COLUMN "total_beds" INTEGER NOT NULL DEFAULT 4,
+ADD COLUMN "pending_beds" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "rented_beds" INTEGER NOT NULL DEFAULT 0;

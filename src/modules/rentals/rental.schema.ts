@@ -283,6 +283,7 @@ export const adminCreateListingSchema = z
     addressText: optionalText(500),
     locationText: optionalText(500),
     images: z.array(listingImageSchema).max(20).optional(),
+    totalBeds: z.number().int().min(1).max(20).optional(),
   })
   .strict();
 

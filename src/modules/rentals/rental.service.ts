@@ -82,6 +82,9 @@ const publicListingBaseSelect = {
   expiresAt: true,
   reservedUntil: true,
   createdAt: true,
+  totalBeds: true,
+  pendingBeds: true,
+  rentedBeds: true,
   compound: {
     select: {
       id: true,
@@ -676,6 +679,9 @@ export class RentalService {
           status: RentalListingStatus.PENDING_REVIEW,
           isPublished: false,
           isFeatured: false,
+          totalBeds: 4,
+          pendingBeds: 0,
+          rentedBeds: 0,
           images: preprocessedImages.length
             ? {
                 create: preprocessedImages.map((image) => ({
@@ -701,7 +707,10 @@ export class RentalService {
 
       return {
         submission: updatedSubmission,
-        listing,
+        listing: {
+          ...listing,
+          availableBeds: Math.max((listing.totalBeds ?? 4) - (listing.pendingBeds ?? 0) - (listing.rentedBeds ?? 0), 0),
+        },
       };
     });
   }
@@ -817,6 +826,13 @@ export class RentalService {
     });
   }
 
+  private static addAvailableBeds<T extends { totalBeds: number; pendingBeds: number; rentedBeds: number }>(listing: T) {
+    return {
+      ...listing,
+      availableBeds: Math.max((listing.totalBeds ?? 4) - (listing.pendingBeds ?? 0) - (listing.rentedBeds ?? 0), 0),
+    };
+  }
+
   static async listPublicListings(query: RentalListQuery) {
     const now = new Date();
     const where = this.buildPublicListingWhere(query, now);
@@ -832,7 +848,12 @@ export class RentalService {
     ]);
 
     return {
-      listings: listings.map((listing) => withOptimizedRentalImages(listing)),
+      listings: listings.map((listing) => {
+        const optimized = withOptimizedRentalImages(listing);
+        const withBeds = this.addAvailableBeds(optimized);
+        const { pendingBeds, rentedBeds, ...rest } = withBeds as any;
+        return rest;
+      }),
       meta: getPaginationMeta(query, totalCount),
     };
   }
@@ -856,7 +877,10 @@ export class RentalService {
       );
     }
 
-    return withOptimizedRentalImages(listing);
+    const optimized = withOptimizedRentalImages(listing);
+    const withBeds = this.addAvailableBeds(optimized);
+    const { pendingBeds, rentedBeds, ...rest } = withBeds as any;
+    return rest;
   }
 
   static async createRentalInquiry(
@@ -1319,7 +1343,7 @@ export class RentalService {
     ]);
 
     return {
-      listings,
+      listings: listings.map((l) => this.addAvailableBeds(l)),
       meta: getPaginationMeta(query, totalCount),
     };
   }
@@ -1338,7 +1362,7 @@ export class RentalService {
       );
     }
 
-    return listing;
+    return this.addAvailableBeds(listing);
   }
 
   static async listAdminInquiries(query: RentalInquiryQuery) {
@@ -1438,7 +1462,7 @@ export class RentalService {
             floor: input.floor,
           });
 
-      return tx.rentalListing.create({
+      const listing = await tx.rentalListing.create({
         data: {
           compoundId: compound.id,
           ownerId: owner.id,
@@ -1465,6 +1489,9 @@ export class RentalService {
           locationText: cleanText(input.locationText),
           status: RentalListingStatus.PENDING_REVIEW,
           isFeatured: input.isFeatured ?? false,
+          totalBeds: input.totalBeds ?? 4,
+          pendingBeds: 0,
+          rentedBeds: 0,
           images: input.images?.length
             ? {
                 create: (() => {
@@ -1485,6 +1512,7 @@ export class RentalService {
         },
         include: adminListingInclude,
       });
+      return this.addAvailableBeds(listing);
     });
   }
 
@@ -1537,7 +1565,7 @@ export class RentalService {
           })
         : undefined;
 
-      return tx.rentalListing.update({
+      const listing = await tx.rentalListing.update({
         where: { id },
         data: {
           ownerId: owner?.id ?? input.ownerId,
@@ -1562,6 +1590,7 @@ export class RentalService {
           platformCommissionRate: input.platformCommissionRate,
           addressText: input.addressText,
           locationText: input.locationText,
+          totalBeds: input.totalBeds,
           images: input.images
             ? {
                 create: (() => {
@@ -1582,6 +1611,7 @@ export class RentalService {
         },
         include: adminListingInclude,
       });
+      return this.addAvailableBeds(listing);
     });
   }
 
@@ -1598,7 +1628,7 @@ export class RentalService {
 
     const now = new Date();
 
-    return prisma.rentalListing.update({
+    const updated = await prisma.rentalListing.update({
       where: { id },
       data: {
         status: RentalListingStatus.ACTIVE,
@@ -1608,12 +1638,13 @@ export class RentalService {
       },
       include: adminListingInclude,
     });
+    return this.addAvailableBeds(updated);
   }
 
   static async deleteAdminListing(id: RentalIdParams['id']) {
     await this.getAdminListingById(id);
 
-    return prisma.rentalListing.update({
+    const updated = await prisma.rentalListing.update({
       where: { id },
       data: {
         status: RentalListingStatus.REMOVED,
@@ -1621,12 +1652,13 @@ export class RentalService {
       },
       include: adminListingInclude,
     });
+    return this.addAvailableBeds(updated);
   }
 
   static async unpublishAdminListing(id: RentalIdParams['id']) {
     await this.getAdminListingById(id);
 
-    return prisma.rentalListing.update({
+    const updated = await prisma.rentalListing.update({
       where: { id },
       data: {
         status: RentalListingStatus.SUSPENDED,
@@ -1634,6 +1666,7 @@ export class RentalService {
       },
       include: adminListingInclude,
     });
+    return this.addAvailableBeds(updated);
   }
 
   static async markAdminListingAvailable(id: RentalIdParams['id']) {
@@ -1654,7 +1687,7 @@ export class RentalService {
       );
     }
 
-    return prisma.rentalListing.update({
+    const updated = await prisma.rentalListing.update({
       where: { id },
       data: {
         status: RentalListingStatus.ACTIVE,
@@ -1663,6 +1696,7 @@ export class RentalService {
       },
       include: adminListingInclude,
     });
+    return this.addAvailableBeds(updated);
   }
 
   static async markAdminListingRented(id: RentalIdParams['id']) {
@@ -1681,7 +1715,7 @@ export class RentalService {
       );
     }
 
-    return prisma.rentalListing.update({
+    const updated = await prisma.rentalListing.update({
       where: { id },
       data: {
         status: RentalListingStatus.RENTED,
@@ -1691,6 +1725,7 @@ export class RentalService {
       },
       include: adminListingInclude,
     });
+    return this.addAvailableBeds(updated);
   }
 
   static async confirmReservation(id: RentalIdParams['id']) {
@@ -1763,7 +1798,7 @@ export class RentalService {
 
       return {
         reservation: confirmedReservation,
-        listing,
+        listing: this.addAvailableBeds(listing),
       };
     });
   }
@@ -1801,7 +1836,7 @@ export class RentalService {
 
       return {
         reservation: cancelledReservation,
-        listing,
+        listing: this.addAvailableBeds(listing),
         refundPending: Boolean(reservation.paymentId),
       };
     });
