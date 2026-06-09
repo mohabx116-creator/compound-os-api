@@ -439,6 +439,19 @@ function buildAdminListingDescription(input: AdminCreateListingInput) {
   return lines.join('\n');
 }
 
+interface PublicListingsResponse {
+  listings: any[];
+  meta: ReturnType<typeof getPaginationMeta>;
+}
+
+interface PublicListingsCacheEntry {
+  data: PublicListingsResponse;
+  savedAt: number;
+  expiresAt: number;
+}
+
+const publicListingsCache = new Map<string, PublicListingsCacheEntry>();
+
 export class RentalService {
   static createCloudinaryUploadSignature(input: CloudinaryUploadSignatureInput = {}) {
     const configuredFolder =
@@ -873,7 +886,30 @@ export class RentalService {
     return inquiry;
   }
 
-  static async listPublicListings(query: RentalListQuery) {
+  static async listPublicListings(query: RentalListQuery): Promise<PublicListingsResponse> {
+    const startTime = Date.now();
+    const normalized: Record<string, any> = {};
+    const sortedKeys = Object.keys(query || {}).sort();
+    for (const key of sortedKeys) {
+      const val = (query as any)[key];
+      if (val !== undefined && val !== null && val !== '') {
+        normalized[key] = val;
+      }
+    }
+    const cacheKey = JSON.stringify(normalized);
+    const nowMs = Date.now();
+    const cached = publicListingsCache.get(cacheKey);
+
+    if (cached && cached.expiresAt > nowMs) {
+      const durationMs = Date.now() - startTime;
+      const listingsCount = cached.data.listings.length;
+      const totalCount = cached.data.meta.totalCount;
+      console.info(
+        `[RentalsPublicListings] cache=HIT durationMs=${durationMs} totalCount=${totalCount} items=${listingsCount} filters=${cacheKey}`
+      );
+      return cached.data;
+    }
+
     const now = new Date();
     const where = this.buildPublicListingWhere(query, now);
 
@@ -887,7 +923,7 @@ export class RentalService {
       }),
     ]);
 
-    return {
+    const result: PublicListingsResponse = {
       listings: listings.map((listing) => {
         const optimized = withOptimizedRentalImages(listing);
         const withBeds = this.addAvailableBeds(optimized);
@@ -896,6 +932,20 @@ export class RentalService {
       }),
       meta: getPaginationMeta(query, totalCount),
     };
+
+    publicListingsCache.set(cacheKey, {
+      data: result,
+      savedAt: Date.now(),
+      expiresAt: Date.now() + 30000,
+    });
+
+    const durationMs = Date.now() - startTime;
+    const listingsCount = result.listings.length;
+    console.info(
+      `[RentalsPublicListings] cache=MISS durationMs=${durationMs} totalCount=${totalCount} items=${listingsCount} filters=${cacheKey}`
+    );
+
+    return result;
   }
 
   static async getPublicListingBySlug(slug: RentalSlugParams['slug']) {
