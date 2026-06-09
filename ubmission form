@@ -1,0 +1,6 @@
+[33mfec6dc1[m[33m ([m[1;36mHEAD -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Cache public rental listings briefly
+[33m3a021c7[m Add owner submission bed count and duplicate review
+[33m0bcc92c[m Add bed counter handling for inquiry status updates
+[33me1e6ab5[m Reserve one bed for rental inquiries
+[33mbd87761[m Add rental bed counters
+[33mdb2a473[m Add WhatsApp inquiry reservation flow
