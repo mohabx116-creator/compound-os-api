@@ -284,6 +284,9 @@ const adminOwnerSubmissionSelect = {
   ownerWhatsapp: true,
   ownerEmail: true,
   ownerNationalId: true,
+  totalBeds: true,
+  duplicateReviewFlag: true,
+  reviewReason: true,
   preferredContactMethod: true,
   listingType: true,
   title: true,
@@ -481,6 +484,27 @@ export class RentalService {
     const title = cleanText(input.title) ?? buildOwnerSubmissionTitle(input);
     const description = cleanText(input.description) ?? buildOwnerSubmissionDescription(input);
 
+    const cleanNationalId = cleanText(input.ownerNationalId)?.trim();
+    let duplicateReviewFlag = false;
+    let reviewReason: string | null = null;
+
+    if (cleanNationalId) {
+      const duplicateSubmission = await prisma.rentalOwnerSubmission.findFirst({
+        where: { ownerNationalId: cleanNationalId },
+        select: { id: true },
+      });
+
+      const duplicateOwner = await prisma.rentalOwner.findFirst({
+        where: { nationalId: cleanNationalId },
+        select: { id: true },
+      });
+
+      if (duplicateSubmission || duplicateOwner) {
+        duplicateReviewFlag = true;
+        reviewReason = "رقم قومي مستخدم من قبل";
+      }
+    }
+
     return prisma.rentalOwnerSubmission.create({
       data: {
         compoundId: compound.id,
@@ -488,7 +512,10 @@ export class RentalService {
         ownerPhone: this.normalizePhone(input.ownerPhone),
         ownerWhatsapp: this.normalizePhone(input.ownerWhatsapp),
         ownerEmail: cleanText(input.ownerEmail),
-        ownerNationalId: cleanText(input.ownerNationalId),
+        ownerNationalId: cleanNationalId,
+        totalBeds: input.totalBeds ?? 4,
+        duplicateReviewFlag,
+        reviewReason,
         preferredContactMethod: cleanText(input.preferredContactMethod),
         listingType: 'APARTMENT',
         title,
@@ -682,7 +709,7 @@ export class RentalService {
           status: RentalListingStatus.PENDING_REVIEW,
           isPublished: false,
           isFeatured: false,
-          totalBeds: 4,
+          totalBeds: submission.totalBeds ?? 4,
           pendingBeds: 0,
           rentedBeds: 0,
           images: preprocessedImages.length

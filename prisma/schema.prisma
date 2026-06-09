@@ -349,6 +349,9 @@ model RentalOwnerSubmission {
   ownerWhatsapp          String?                     @map("owner_whatsapp")
   ownerEmail             String?                     @map("owner_email")
   ownerNationalId        String?                     @map("owner_national_id")
+  totalBeds              Int                         @default(4) @map("total_beds")
+  duplicateReviewFlag    Boolean                     @default(false) @map("duplicate_review_flag")
+  reviewReason           String?                     @map("review_reason")
   preferredContactMethod String?                     @map("preferred_contact_method")
   listingType            RentalListingType           @map("listing_type")
   title                  String

@@ -200,14 +200,21 @@ export const cloudinaryUploadSignatureSchema = z
 
 export const createOwnerSubmissionSchema = z
   .object({
-    ownerName: z.string().trim().min(2, 'Owner name is required').max(150).refine(
-      (value) => value.split(/\s+/).filter(Boolean).length >= 2,
-      'Owner full name must include at least two words',
-    ),
+    ownerName: z
+      .string()
+      .trim()
+      .min(2, 'Owner name is required')
+      .max(150)
+      .regex(/^[\u0621-\u064A\s]+$/, 'Owner name must be in Arabic letters and spaces only')
+      .refine(
+        (value) => value.split(/\s+/).filter(Boolean).length >= 2,
+        'Owner full name must include at least two words',
+      ),
     ownerPhone: z.string().trim().min(5, 'Owner phone is required').max(30),
     ownerWhatsapp: z.string().trim().min(5, 'Owner WhatsApp is required').max(30),
     ownerEmail: optionalEmail,
-    ownerNationalId: optionalText(50),
+    ownerNationalId: z.string().trim().regex(/^[0-9]{14}$/, 'Owner national ID must be exactly 14 English digits'),
+    totalBeds: z.number().int().min(1).max(20).default(4),
     preferredContactMethod: optionalText(40),
     listingType: listingTypeSchema.default('APARTMENT'),
     title: optionalText(180),

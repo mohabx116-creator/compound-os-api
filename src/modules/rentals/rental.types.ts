@@ -109,7 +109,8 @@ export interface CreateOwnerSubmissionInput {
   ownerPhone: string;
   ownerWhatsapp: string;
   ownerEmail?: string;
-  ownerNationalId?: string;
+  ownerNationalId: string;
+  totalBeds?: number;
   preferredContactMethod?: string;
   listingType?: RentalListingType;
   title?: string;
