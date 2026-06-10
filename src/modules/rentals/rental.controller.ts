@@ -124,6 +124,18 @@ export class RentalController {
     });
   });
 
+  static approveAndConvertAdminOwnerSubmissionToListing = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params as unknown as OwnerSubmissionParams;
+    const result = await RentalService.approveAndConvertOwnerSubmissionToListing(id);
+
+    successResponse({
+      res,
+      statusCode: 200,
+      message: 'Owner listing submission approved and converted successfully',
+      data: result,
+    });
+  });
+
   static listRentalOwners = asyncHandler(async (req: Request, res: Response) => {
     const result = await RentalService.listRentalOwners(
       req.query as unknown as RentalOwnerQuery,

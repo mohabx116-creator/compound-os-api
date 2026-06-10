@@ -200,6 +200,14 @@ router.post(
   RentalController.convertAdminOwnerSubmissionToListing,
 );
 
+router.post(
+  '/admin/owner-submissions/:id/approve-and-convert',
+  ...requireRentalAdmin,
+  validate({ params: ownerSubmissionParamsSchema }),
+  RentalController.approveAndConvertAdminOwnerSubmissionToListing,
+);
+
+
 router.patch(
   '/admin/inquiries/:id/status',
   ...requireRentalAdmin,

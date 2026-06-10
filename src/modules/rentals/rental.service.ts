@@ -645,7 +645,65 @@ export class RentalService {
     id: OwnerSubmissionParams['id'],
     input: UpdateOwnerSubmissionStatusInput,
   ) {
-    await this.getAdminOwnerSubmissionById(id);
+    const submission = await this.getAdminOwnerSubmissionById(id);
+
+    const currentStatus = submission.status;
+    const targetStatus = input.status;
+
+    if (currentStatus !== targetStatus) {
+      if (currentStatus === RentalOwnerSubmissionStatus.CONVERTED_TO_LISTING) {
+        throw new AppError(
+          'Cannot update status of a submission that has already been converted to a listing',
+          400,
+          ErrorCodes.BAD_REQUEST,
+        );
+      }
+      if (currentStatus === RentalOwnerSubmissionStatus.REJECTED) {
+        throw new AppError(
+          'Cannot update status of a rejected submission',
+          400,
+          ErrorCodes.BAD_REQUEST,
+        );
+      }
+      if (targetStatus === RentalOwnerSubmissionStatus.CONVERTED_TO_LISTING) {
+        throw new AppError(
+          'Cannot manually update status to CONVERTED_TO_LISTING',
+          400,
+          ErrorCodes.BAD_REQUEST,
+        );
+      }
+
+      if (currentStatus === RentalOwnerSubmissionStatus.NEW) {
+        const allowed: RentalOwnerSubmissionStatus[] = [
+          RentalOwnerSubmissionStatus.UNDER_REVIEW,
+          RentalOwnerSubmissionStatus.APPROVED,
+          RentalOwnerSubmissionStatus.REJECTED,
+          RentalOwnerSubmissionStatus.NEEDS_CHANGES,
+          RentalOwnerSubmissionStatus.CANCELLED,
+        ];
+        if (!allowed.includes(targetStatus)) {
+          throw new AppError(
+            `Invalid status transition from NEW to ${targetStatus}`,
+            400,
+            ErrorCodes.BAD_REQUEST,
+          );
+        }
+      } else if (currentStatus === RentalOwnerSubmissionStatus.UNDER_REVIEW) {
+        const allowed: RentalOwnerSubmissionStatus[] = [
+          RentalOwnerSubmissionStatus.APPROVED,
+          RentalOwnerSubmissionStatus.REJECTED,
+          RentalOwnerSubmissionStatus.NEEDS_CHANGES,
+          RentalOwnerSubmissionStatus.CANCELLED,
+        ];
+        if (!allowed.includes(targetStatus)) {
+          throw new AppError(
+            `Invalid status transition from UNDER_REVIEW to ${targetStatus}`,
+            400,
+            ErrorCodes.BAD_REQUEST,
+          );
+        }
+      }
+    }
 
     return prisma.rentalOwnerSubmission.update({
       where: { id },
@@ -684,6 +742,14 @@ export class RentalService {
       );
     }
 
+    if (submission.status === RentalOwnerSubmissionStatus.REJECTED) {
+      throw new AppError(
+        'Cannot convert a rejected submission',
+        409,
+        ErrorCodes.CONFLICT,
+      );
+    }
+
     if (submission.status !== RentalOwnerSubmissionStatus.APPROVED) {
       throw new AppError(
         'Owner submission must be approved before conversion',
@@ -700,98 +766,65 @@ export class RentalService {
       );
     }
 
-    const areaSqm = submission.areaSqm;
+    return this.executeSubmissionConversion(submission);
+  }
 
-    return prisma.$transaction(async (tx) => {
-      const owner = await tx.rentalOwner.upsert({
-        where: {
-          compoundId_phone: {
-            compoundId: submission.compoundId,
-            phone: submission.ownerPhone,
-          },
+  static async approveAndConvertOwnerSubmissionToListing(id: OwnerSubmissionParams['id']) {
+    const submission = await prisma.rentalOwnerSubmission.findUnique({
+      where: { id },
+      include: {
+        images: {
+          orderBy: [{ isCover: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
         },
-        create: {
-          compoundId: submission.compoundId,
-          fullName: submission.ownerName,
-          phone: submission.ownerPhone,
-          email: submission.ownerEmail,
-          nationalId: submission.ownerNationalId,
-          status: RentalOwnerStatus.ACTIVE,
-        },
-        update: {
-          fullName: submission.ownerName,
-          email: submission.ownerEmail,
-          nationalId: submission.ownerNationalId,
-          status: RentalOwnerStatus.ACTIVE,
-        },
-      });
-
-      const slug = await this.createUniqueSlugInTransaction(tx, submission.title);
-      const preprocessedImages = this.normalizeSubmissionImages(submission.images);
-
-      const listing = await tx.rentalListing.create({
-        data: {
-          compoundId: submission.compoundId,
-          ownerId: owner.id,
-          title: submission.title,
-          slug,
-          description: submission.description,
-          listingType: submission.listingType,
-          furnishingStatus: submission.furnishingStatus,
-          bedrooms: 2,
-          bathrooms: submission.bathrooms ?? 1,
-          areaSqm: 63,
-          floor: submission.floor,
-          isAirConditioned: submission.isAirConditioned,
-          basicFeatures: submission.basicFeatures ?? undefined,
-          extraAmenitiesText: submission.extraAmenitiesText,
-          monthlyRent: submission.monthlyRent,
-          depositAmount: this.calculateDeposit(submission.monthlyRent),
-          unitCondition: submission.unitCondition,
-          basics: submission.basics,
-          amenities: submission.amenities,
-          contactUnlockFee: RENTAL_POLICY.tenantContactUnlockFee,
-          reservationFee: RENTAL_POLICY.reservationHoldFee,
-          platformCommissionRate: RENTAL_POLICY.platformCommissionRate,
-          addressText: submission.addressText,
-          locationText: submission.locationText,
-          status: RentalListingStatus.PENDING_REVIEW,
-          isPublished: false,
-          isFeatured: false,
-          totalBeds: submission.totalBeds ?? 4,
-          pendingBeds: 0,
-          rentedBeds: 0,
-          images: preprocessedImages.length
-            ? {
-                create: preprocessedImages.map((image) => ({
-                  url: image.url,
-                  altText: image.altText,
-                  sortOrder: image.sortOrder,
-                  isCover: image.isCover,
-                })),
-              }
-            : undefined,
-        },
-        include: adminListingInclude,
-      });
-
-      const updatedSubmission = await tx.rentalOwnerSubmission.update({
-        where: { id: submission.id },
-        data: {
-          status: RentalOwnerSubmissionStatus.CONVERTED_TO_LISTING,
-          createdListingId: listing.id,
-        },
-        select: adminOwnerSubmissionSelect,
-      });
-
-      return {
-        submission: updatedSubmission,
-        listing: {
-          ...listing,
-          availableBeds: Math.max((listing.totalBeds ?? 4) - (listing.pendingBeds ?? 0) - (listing.rentedBeds ?? 0), 0),
-        },
-      };
+      },
     });
+
+    if (!submission) {
+      throw new AppError(
+        'Owner submission not found',
+        404,
+        ErrorCodes.NOT_FOUND,
+      );
+    }
+
+    if (submission.createdListingId || submission.status === RentalOwnerSubmissionStatus.CONVERTED_TO_LISTING) {
+      throw new AppError(
+        'Owner submission was already converted to a listing',
+        409,
+        ErrorCodes.CONFLICT,
+      );
+    }
+
+    if (submission.status === RentalOwnerSubmissionStatus.REJECTED) {
+      throw new AppError(
+        'Cannot convert a rejected submission',
+        409,
+        ErrorCodes.CONFLICT,
+      );
+    }
+
+    const validStatuses: RentalOwnerSubmissionStatus[] = [
+      RentalOwnerSubmissionStatus.NEW,
+      RentalOwnerSubmissionStatus.UNDER_REVIEW,
+      RentalOwnerSubmissionStatus.APPROVED,
+    ];
+    if (!validStatuses.includes(submission.status)) {
+      throw new AppError(
+        `Submission status ${submission.status} cannot be converted`,
+        400,
+        ErrorCodes.BAD_REQUEST,
+      );
+    }
+
+    if (submission.areaSqm === null || submission.bedrooms === null) {
+      throw new AppError(
+        'Submission is missing required listing dimensions or room counts',
+        409,
+        ErrorCodes.CONFLICT,
+      );
+    }
+
+    return this.executeSubmissionConversion(submission);
   }
 
   static async listRentalOwners(query: RentalOwnerQuery) {
@@ -1654,6 +1687,14 @@ export class RentalService {
         isPublished = false;
       }
 
+      this.validateListingBeds(
+        listingStatus,
+        isPublished,
+        totalBeds,
+        newPendingBeds,
+        newRentedBeds
+      );
+
       await tx.rentalListing.update({
         where: { id: listing.id },
         data: {
@@ -1705,6 +1746,14 @@ export class RentalService {
     } else {
       slug = await this.createUniqueSlug(title);
     }
+
+    this.validateListingBeds(
+      RentalListingStatus.PENDING_REVIEW,
+      false,
+      input.totalBeds ?? 4,
+      0,
+      0
+    );
 
     return prisma.$transaction(async (tx) => {
       const owner = await this.resolveAdminListingOwner(tx, {
@@ -1814,6 +1863,20 @@ export class RentalService {
       slug = cleanSlug;
     }
 
+    const targetTotalBeds = input.totalBeds !== undefined ? input.totalBeds : existing.totalBeds;
+    const targetPendingBeds = existing.pendingBeds;
+    const targetRentedBeds = existing.rentedBeds;
+    const targetStatus = existing.status;
+    const targetIsPublished = existing.isPublished;
+
+    this.validateListingBeds(
+      targetStatus,
+      targetIsPublished,
+      targetTotalBeds,
+      targetPendingBeds,
+      targetRentedBeds
+    );
+
     return prisma.$transaction(async (tx) => {
       if (input.images) {
         await tx.rentalListingImage.deleteMany({ where: { listingId: id } });
@@ -1893,6 +1956,14 @@ export class RentalService {
       );
     }
 
+    this.validateListingBeds(
+      RentalListingStatus.ACTIVE,
+      true,
+      listing.totalBeds,
+      listing.pendingBeds,
+      listing.rentedBeds
+    );
+
     const now = new Date();
 
     const updated = await prisma.rentalListing.update({
@@ -1953,6 +2024,14 @@ export class RentalService {
         ErrorCodes.RENTAL_LISTING_NOT_AVAILABLE,
       );
     }
+
+    this.validateListingBeds(
+      RentalListingStatus.ACTIVE,
+      true,
+      listing.totalBeds,
+      listing.pendingBeds,
+      listing.rentedBeds
+    );
 
     const updated = await prisma.rentalListing.update({
       where: { id },
@@ -2621,5 +2700,139 @@ export class RentalService {
         },
       }),
     ]);
+  }
+
+  private static validateListingBeds(
+    status: RentalListingStatus,
+    isPublished: boolean,
+    totalBeds: number,
+    pendingBeds: number,
+    rentedBeds: number
+  ) {
+    if (totalBeds < 0) {
+      throw new AppError('Total beds cannot be negative', 400, ErrorCodes.BAD_REQUEST);
+    }
+    if (pendingBeds < 0) {
+      throw new AppError('Pending beds cannot be negative', 400, ErrorCodes.BAD_REQUEST);
+    }
+    if (rentedBeds < 0) {
+      throw new AppError('Rented beds cannot be negative', 400, ErrorCodes.BAD_REQUEST);
+    }
+    if (pendingBeds + rentedBeds > totalBeds) {
+      throw new AppError(
+        'Rented beds and pending beds cannot exceed total beds',
+        400,
+        ErrorCodes.BAD_REQUEST
+      );
+    }
+
+    const isTargetPublicActivePublished =
+      status === RentalListingStatus.ACTIVE && isPublished === true;
+
+    if (isTargetPublicActivePublished) {
+      const availableBeds = totalBeds - pendingBeds - rentedBeds;
+      if (availableBeds <= 0) {
+        throw new AppError(
+          'Cannot publish or set status to active when available beds are 0 or less',
+          400,
+          ErrorCodes.BAD_REQUEST
+        );
+      }
+    }
+  }
+
+  private static async executeSubmissionConversion(submission: any) {
+    this.validateListingBeds(RentalListingStatus.PENDING_REVIEW, false, submission.totalBeds ?? 4, 0, 0);
+
+    return prisma.$transaction(async (tx) => {
+      const owner = await tx.rentalOwner.upsert({
+        where: {
+          compoundId_phone: {
+            compoundId: submission.compoundId,
+            phone: submission.ownerPhone,
+          },
+        },
+        create: {
+          compoundId: submission.compoundId,
+          fullName: submission.ownerName,
+          phone: submission.ownerPhone,
+          email: submission.ownerEmail,
+          nationalId: submission.ownerNationalId,
+          status: RentalOwnerStatus.ACTIVE,
+        },
+        update: {
+          fullName: submission.ownerName,
+          email: submission.ownerEmail,
+          nationalId: submission.ownerNationalId,
+          status: RentalOwnerStatus.ACTIVE,
+        },
+      });
+
+      const slug = await this.createUniqueSlugInTransaction(tx, submission.title);
+      const preprocessedImages = this.normalizeSubmissionImages(submission.images);
+
+      const listing = await tx.rentalListing.create({
+        data: {
+          compoundId: submission.compoundId,
+          ownerId: owner.id,
+          title: submission.title,
+          slug,
+          description: submission.description,
+          listingType: submission.listingType,
+          furnishingStatus: submission.furnishingStatus,
+          bedrooms: 2,
+          bathrooms: submission.bathrooms ?? 1,
+          areaSqm: 63,
+          floor: submission.floor,
+          isAirConditioned: submission.isAirConditioned,
+          basicFeatures: submission.basicFeatures ?? undefined,
+          extraAmenitiesText: submission.extraAmenitiesText,
+          monthlyRent: submission.monthlyRent,
+          depositAmount: this.calculateDeposit(submission.monthlyRent),
+          unitCondition: submission.unitCondition,
+          basics: submission.basics,
+          amenities: submission.amenities,
+          contactUnlockFee: RENTAL_POLICY.tenantContactUnlockFee,
+          reservationFee: RENTAL_POLICY.reservationHoldFee,
+          platformCommissionRate: RENTAL_POLICY.platformCommissionRate,
+          addressText: submission.addressText,
+          locationText: submission.locationText,
+          status: RentalListingStatus.PENDING_REVIEW,
+          isPublished: false,
+          isFeatured: false,
+          totalBeds: submission.totalBeds ?? 4,
+          pendingBeds: 0,
+          rentedBeds: 0,
+          images: preprocessedImages.length
+            ? {
+                create: preprocessedImages.map((image) => ({
+                  url: image.url,
+                  altText: image.altText,
+                  sortOrder: image.sortOrder,
+                  isCover: image.isCover,
+                })),
+              }
+            : undefined,
+        },
+        include: adminListingInclude,
+      });
+
+      const updatedSubmission = await tx.rentalOwnerSubmission.update({
+        where: { id: submission.id },
+        data: {
+          status: RentalOwnerSubmissionStatus.CONVERTED_TO_LISTING,
+          createdListingId: listing.id,
+        },
+        select: adminOwnerSubmissionSelect,
+      });
+
+      return {
+        submission: updatedSubmission,
+        listing: {
+          ...listing,
+          availableBeds: Math.max((listing.totalBeds ?? 4) - (listing.pendingBeds ?? 0) - (listing.rentedBeds ?? 0), 0),
+        },
+      };
+    });
   }
 }
