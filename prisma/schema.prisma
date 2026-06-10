@@ -295,10 +295,13 @@ model RentalListing {
   unitCondition          String?                @map("unit_condition")
   basics                 String?
   amenities              String?
-  bedrooms               Int
+  bedrooms               Int                    @default(2)
   bathrooms              Int
-  areaSqm                Decimal                @map("area_sqm") @db.Decimal(10, 2)
+  areaSqm                Decimal                @default(63) @map("area_sqm") @db.Decimal(10, 2)
   floor                  Int?
+  isAirConditioned       Boolean                @default(false) @map("is_air_conditioned")
+  basicFeatures          Json?                  @map("basic_features")
+  extraAmenitiesText     String?                @map("extra_amenities_text")
   monthlyRent            Decimal                @map("monthly_rent") @db.Decimal(12, 2)
   depositAmount          Decimal?               @map("deposit_amount") @db.Decimal(12, 2)
   contactUnlockFee       Decimal                @default(100.00) @map("contact_unlock_fee") @db.Decimal(12, 2)
@@ -359,9 +362,12 @@ model RentalOwnerSubmission {
   addressText            String?                     @map("address_text")
   locationText           String?                     @map("location_text")
   floor                  Int?
-  areaSqm                Decimal?                    @map("area_sqm") @db.Decimal(10, 2)
-  bedrooms               Int?
+  areaSqm                Decimal?                    @default(63) @map("area_sqm") @db.Decimal(10, 2)
+  bedrooms               Int?                        @default(2)
   bathrooms              Int?
+  isAirConditioned       Boolean                     @default(false) @map("is_air_conditioned")
+  basicFeatures          Json?                       @map("basic_features")
+  extraAmenitiesText     String?                     @map("extra_amenities_text")
   furnishingStatus       RentalFurnishingStatus      @map("furnishing_status")
   unitCondition          String?                     @map("unit_condition")
   basics                 String?

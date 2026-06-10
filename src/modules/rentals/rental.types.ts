@@ -125,8 +125,11 @@ export interface CreateOwnerSubmissionInput {
   unitCondition?: string;
   basics?: string;
   amenities?: string;
+  isAirConditioned?: boolean;
+  basicFeatures?: string[];
+  extraAmenitiesText?: string;
   monthlyRent: number;
-  depositAmount: number;
+  depositAmount?: number;
   images: AdminListingImageInput[];
   policyAccepted: true;
 }
@@ -157,12 +160,15 @@ export interface AdminCreateListingInput {
   unitCondition?: string;
   basics?: string;
   amenities?: string;
+  isAirConditioned?: boolean;
+  basicFeatures?: string[];
+  extraAmenitiesText?: string;
   bedrooms?: number;
   bathrooms?: number;
-  areaSqm: number;
-  floor: number;
+  areaSqm?: number;
+  floor?: number;
   monthlyRent: number;
-  depositAmount: number;
+  depositAmount?: number;
   contactUnlockFee?: number;
   reservationFee?: number;
   platformCommissionRate?: number;

@@ -70,6 +70,9 @@ const publicListingBaseSelect = {
   bathrooms: true,
   areaSqm: true,
   floor: true,
+  isAirConditioned: true,
+  basicFeatures: true,
+  extraAmenitiesText: true,
   monthlyRent: true,
   depositAmount: true,
   contactUnlockFee: true,
@@ -452,7 +455,36 @@ interface PublicListingsCacheEntry {
 
 const publicListingsCache = new Map<string, PublicListingsCacheEntry>();
 
+const RENTAL_BASIC_FEATURE_KEYS = [
+  'internet',
+  'basic_appliances',
+  'water_motor',
+  'desks',
+  'window_mesh',
+  'water_heater',
+  'water_filter',
+];
+
 export class RentalService {
+  static normalizeBasicFeatures(input: any) {
+    if (input === undefined || input === null) {
+      return RENTAL_BASIC_FEATURE_KEYS;
+    }
+    if (Array.isArray(input)) {
+      if (input.length === 0) return [];
+      const validKeys = input.filter((k) => typeof k === 'string' && RENTAL_BASIC_FEATURE_KEYS.includes(k));
+      return Array.from(new Set(validKeys));
+    }
+    return RENTAL_BASIC_FEATURE_KEYS;
+  }
+
+  static calculateDeposit(monthlyRent: any) {
+    const rent = Number(monthlyRent);
+    if (!isNaN(rent) && rent > 0) {
+      return Number((rent * 2).toFixed(2));
+    }
+    return 0;
+  }
   static createCloudinaryUploadSignature(input: CloudinaryUploadSignatureInput = {}) {
     const configuredFolder =
       env.CLOUDINARY_OWNER_SUBMISSIONS_FOLDER ||
@@ -536,15 +568,18 @@ export class RentalService {
         addressText: cleanText(input.addressText),
         locationText: cleanText(input.locationText),
         floor: input.floor ?? undefined,
-        areaSqm: input.areaSqm,
-        bedrooms: input.bedrooms,
+        areaSqm: 63,
+        bedrooms: 2,
         bathrooms: input.bathrooms ?? 1,
+        isAirConditioned: input.isAirConditioned ?? false,
+        basicFeatures: this.normalizeBasicFeatures(input.basicFeatures),
+        extraAmenitiesText: cleanText(input.extraAmenitiesText),
         furnishingStatus,
         unitCondition,
         basics: cleanText(input.basics),
         amenities: cleanText(input.amenities),
         monthlyRent: input.monthlyRent,
-        depositAmount: input.depositAmount,
+        depositAmount: this.calculateDeposit(input.monthlyRent),
         policyAcceptedAt: new Date(),
         status: RentalOwnerSubmissionStatus.NEW,
         images: {
@@ -705,12 +740,15 @@ export class RentalService {
           description: submission.description,
           listingType: submission.listingType,
           furnishingStatus: submission.furnishingStatus,
-          bedrooms: submission.bedrooms ?? 0,
+          bedrooms: 2,
           bathrooms: submission.bathrooms ?? 1,
-          areaSqm,
+          areaSqm: 63,
           floor: submission.floor,
+          isAirConditioned: submission.isAirConditioned,
+          basicFeatures: submission.basicFeatures ?? undefined,
+          extraAmenitiesText: submission.extraAmenitiesText,
           monthlyRent: submission.monthlyRent,
-          depositAmount: submission.depositAmount,
+          depositAmount: this.calculateDeposit(submission.monthlyRent),
           unitCondition: submission.unitCondition,
           basics: submission.basics,
           amenities: submission.amenities,
@@ -1675,8 +1713,8 @@ export class RentalService {
         ? await this.resolveAdminListingUnit(tx, compound.id, input.unitId)
         : await this.createAdminListingUnit(tx, {
             compoundId: compound.id,
-            areaSqm: input.areaSqm,
-            floor: input.floor,
+            areaSqm: 63,
+            floor: input.floor ?? 0,
           });
 
       const listing = await tx.rentalListing.create({
@@ -1694,10 +1732,13 @@ export class RentalService {
           amenities: cleanText(input.amenities),
           bedrooms: 2,
           bathrooms: 1,
-          areaSqm: input.areaSqm,
+          areaSqm: 63,
           floor: input.floor,
+          isAirConditioned: input.isAirConditioned ?? false,
+          basicFeatures: RentalService.normalizeBasicFeatures(input.basicFeatures),
+          extraAmenitiesText: cleanText(input.extraAmenitiesText),
           monthlyRent: input.monthlyRent,
-          depositAmount: input.depositAmount,
+          depositAmount: input.depositAmount !== undefined ? input.depositAmount : RentalService.calculateDeposit(input.monthlyRent),
           contactUnlockFee: input.contactUnlockFee ?? RENTAL_POLICY.tenantContactUnlockFee,
           reservationFee: input.reservationFee ?? RENTAL_POLICY.reservationHoldFee,
           platformCommissionRate:
@@ -1796,12 +1837,15 @@ export class RentalService {
           unitCondition: input.unitCondition,
           basics: input.basics,
           amenities: input.amenities,
-          bedrooms: input.bedrooms,
+          bedrooms: 2,
           bathrooms: input.bathrooms,
-          areaSqm: input.areaSqm,
+          areaSqm: 63,
           floor: input.floor,
+          isAirConditioned: input.isAirConditioned,
+          basicFeatures: input.basicFeatures !== undefined ? RentalService.normalizeBasicFeatures(input.basicFeatures) : undefined,
+          extraAmenitiesText: input.extraAmenitiesText !== undefined ? cleanText(input.extraAmenitiesText) : undefined,
           monthlyRent: input.monthlyRent,
-          depositAmount: input.depositAmount,
+          depositAmount: input.depositAmount !== undefined ? input.depositAmount : (input.monthlyRent !== undefined ? RentalService.calculateDeposit(input.monthlyRent) : undefined),
           contactUnlockFee: input.contactUnlockFee,
           reservationFee: input.reservationFee,
           platformCommissionRate: input.platformCommissionRate,
