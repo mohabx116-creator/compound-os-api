@@ -86,8 +86,6 @@ const publicListingBaseSelect = {
   reservedUntil: true,
   createdAt: true,
   totalBeds: true,
-  pendingBeds: true,
-  rentedBeds: true,
   compound: {
     select: {
       id: true,
@@ -956,7 +954,11 @@ export class RentalService {
       prisma.rentalListing.findMany({
         where,
         ...getPrismaPagination(query),
-        select: publicListingListSelect,
+        select: {
+          ...publicListingListSelect,
+          pendingBeds: true,
+          rentedBeds: true,
+        },
         orderBy: [{ isFeatured: 'desc' }, { createdAt: 'desc' }],
       }),
     ]);
@@ -994,7 +996,11 @@ export class RentalService {
         isPublished: true,
         OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
       },
-      select: publicListingDetailSelect,
+      select: {
+        ...publicListingDetailSelect,
+        pendingBeds: true,
+        rentedBeds: true,
+      },
     });
 
     if (!listing) {
