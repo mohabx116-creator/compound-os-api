@@ -10,6 +10,7 @@ import {
   RentalPaymentStatus,
   RentalReservationStatus,
   UnitStatus,
+  RentalBedStatus,
 } from '@prisma/client';
 import crypto from 'crypto';
 import { AppError } from '../../common/errors/AppError.js';
@@ -156,6 +157,9 @@ const adminListingInclude = {
   },
   inquiries: {
     orderBy: { createdAt: 'desc' },
+  },
+  beds: {
+    orderBy: { bedNumber: 'asc' },
   },
 } satisfies Prisma.RentalListingInclude;
 
@@ -1825,6 +1829,7 @@ export class RentalService {
         },
         include: adminListingInclude,
       });
+      await RentalService.syncListingBeds(tx, listing.id, listing.totalBeds);
       return this.addAvailableBeds(listing);
     });
   }
@@ -1941,6 +1946,7 @@ export class RentalService {
         },
         include: adminListingInclude,
       });
+      await RentalService.syncListingBeds(tx, listing.id, listing.totalBeds);
       return this.addAvailableBeds(listing);
     });
   }
@@ -2816,6 +2822,7 @@ export class RentalService {
         },
         include: adminListingInclude,
       });
+      await RentalService.syncListingBeds(tx, listing.id, listing.totalBeds);
 
       const updatedSubmission = await tx.rentalOwnerSubmission.update({
         where: { id: submission.id },
@@ -2834,5 +2841,91 @@ export class RentalService {
         },
       };
     });
+  }
+
+  public static computeBedCountsFromBeds(beds: Array<{ status: RentalBedStatus }>) {
+    let totalBeds = beds.length;
+    let availableBeds = 0;
+    let pendingBeds = 0;
+    let rentedBeds = 0;
+    let outOfServiceBeds = 0;
+
+    for (const bed of beds) {
+      switch (bed.status) {
+        case RentalBedStatus.AVAILABLE:
+          availableBeds++;
+          break;
+        case RentalBedStatus.RESERVED:
+          pendingBeds++;
+          break;
+        case RentalBedStatus.RENTED:
+          rentedBeds++;
+          break;
+        case RentalBedStatus.OUT_OF_SERVICE:
+          outOfServiceBeds++;
+          break;
+      }
+    }
+
+    return {
+      totalBeds,
+      availableBeds,
+      pendingBeds,
+      rentedBeds,
+      outOfServiceBeds,
+    };
+  }
+
+  public static async syncListingBeds(
+    tx: Prisma.TransactionClient,
+    listingId: string,
+    targetTotalBeds: number
+  ) {
+    if (targetTotalBeds < 0) {
+      throw new AppError('Total beds cannot be negative', 400, ErrorCodes.BAD_REQUEST);
+    }
+
+    const currentBeds = await tx.rentalBed.findMany({
+      where: { listingId },
+      orderBy: { bedNumber: 'asc' },
+    });
+
+    const currentCount = currentBeds.length;
+
+    if (targetTotalBeds > currentCount) {
+      const bedsToCreate = [];
+      for (let num = currentCount + 1; num <= targetTotalBeds; num++) {
+        bedsToCreate.push({
+          listingId,
+          bedNumber: num,
+          status: RentalBedStatus.AVAILABLE,
+        });
+      }
+      if (bedsToCreate.length > 0) {
+        await tx.rentalBed.createMany({
+          data: bedsToCreate,
+        });
+      }
+    } else if (targetTotalBeds < currentCount) {
+      let excessCount = currentCount - targetTotalBeds;
+      const bedsToDelete = [];
+
+      for (let idx = currentBeds.length - 1; idx >= 0; idx--) {
+        if (excessCount <= 0) break;
+        const bed = currentBeds[idx];
+        if (bed.status === RentalBedStatus.AVAILABLE) {
+          bedsToDelete.push(bed.id);
+          excessCount--;
+        }
+      }
+
+      if (bedsToDelete.length > 0) {
+        await tx.rentalBed.deleteMany({
+          where: {
+            id: { in: bedsToDelete },
+          },
+        });
+      }
+    }
   }
 }

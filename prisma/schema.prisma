@@ -329,6 +329,7 @@ model RentalListing {
   payments       RentalPayment[]
   ledgerEntries  RentalPlatformLedgerEntry[]
   createdFromOwnerSubmission RentalOwnerSubmission?
+  beds           RentalBed[]
 
   @@unique([slug])
   @@index([compoundId])
@@ -633,4 +634,31 @@ model ServiceProvider {
   @@index([status])
   @@index([isFeatured])
   @@map("service_providers")
+}
+
+enum RentalBedStatus {
+  AVAILABLE
+  RESERVED
+  RENTED
+  OUT_OF_SERVICE
+}
+
+model RentalBed {
+  id            String          @id @default(cuid())
+  listingId     String          @map("listing_id")
+  listing       RentalListing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  bedNumber     Int             @map("bed_number")
+  status        RentalBedStatus @default(AVAILABLE)
+  inquiryId     String?         @map("inquiry_id")
+  reservationId String?         @map("reservation_id")
+  notes         String?
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  @@unique([listingId, bedNumber])
+  @@index([listingId])
+  @@index([status])
+  @@index([inquiryId])
+  @@index([reservationId])
+  @@map("rental_beds")
 }
