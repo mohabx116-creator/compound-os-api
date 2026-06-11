@@ -86,6 +86,6 @@ BEGIN
             INSERT INTO "rental_beds" ("id", "listing_id", "bed_number", "status", "created_at", "updated_at")
             VALUES (bed_id, r.id, i, bed_status, NOW(), NOW())
             ON CONFLICT ("listing_id", "bed_number") DO NOTHING;
-        END FOR;
-    END FOR;
+        END LOOP;
+    END LOOP;
 END $$;
