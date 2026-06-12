@@ -2154,20 +2154,37 @@ export class RentalService {
         },
       });
 
-      const listing =
-        reservation.listing.status === RentalListingStatus.RENTED
-          ? reservation.listing
-          : await tx.rentalListing.update({
-              where: { id: reservation.listingId },
-              data: {
-                status: RentalListingStatus.ACTIVE,
-                reservedUntil: null,
-              },
-            });
+      // Release any RESERVED bed linked to this reservation back to AVAILABLE.
+      // RENTED beds are not touched — they were committed by a separate admin action.
+      await tx.rentalBed.updateMany({
+        where: {
+          listingId: reservation.listingId,
+          reservationId: reservation.id,
+          status: RentalBedStatus.RESERVED,
+        },
+        data: {
+          status: RentalBedStatus.AVAILABLE,
+          reservationId: null,
+          inquiryId: null,
+        },
+      });
+
+      if (reservation.listing.status !== RentalListingStatus.RENTED) {
+        await tx.rentalListing.update({
+          where: { id: reservation.listingId },
+          data: {
+            status: RentalListingStatus.ACTIVE,
+            reservedUntil: null,
+          },
+        });
+      }
+
+      // Sync counters from beds after releasing the reserved bed
+      const syncedListing = await this.syncListingCountersFromBeds(reservation.listingId, tx);
 
       return {
         reservation: cancelledReservation,
-        listing: this.addAvailableBeds(listing),
+        listing: this.addAvailableBeds(syncedListing),
         refundPending: Boolean(reservation.paymentId),
       };
     });
