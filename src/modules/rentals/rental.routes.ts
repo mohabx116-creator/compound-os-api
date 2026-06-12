@@ -33,8 +33,14 @@ import {
 const router = Router();
 const requireRentalAdmin = [requireAuth, requireAdminRole] as const;
 
-const publicPaymentInitiationLimiter = rateLimit({
-  keyPrefix: 'rentals:payment-initiation',
+const legacyContactUnlockLimiter = rateLimit({
+  keyPrefix: 'rentals:legacy-contact-unlock',
+  max: 10,
+  windowMs: 15 * 60 * 1000,
+});
+
+const publicReservationLimiter = rateLimit({
+  keyPrefix: 'rentals:reservation-action',
   max: 10,
   windowMs: 15 * 60 * 1000,
 });
@@ -93,7 +99,7 @@ router.post(
 
 router.post(
   '/listings/:id/contact-unlock',
-  publicPaymentInitiationLimiter,
+  legacyContactUnlockLimiter,
   validate({ params: rentalIdParamsSchema, body: tenantPaymentRequestSchema }),
   RentalController.startContactUnlockPayment,
 );
@@ -106,7 +112,7 @@ router.get(
 
 router.post(
   '/listings/:id/reservations',
-  publicPaymentInitiationLimiter,
+  publicReservationLimiter,
   validate({ params: rentalIdParamsSchema, body: tenantPaymentRequestSchema }),
   RentalController.startReservationPayment,
 );

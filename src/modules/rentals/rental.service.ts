@@ -1,12 +1,10 @@
 import {
-  PaymentProvider,
   Prisma,
   RentalInquiryStatus,
   RentalFurnishingStatus,
   RentalListingStatus,
   RentalOwnerStatus,
   RentalOwnerSubmissionStatus,
-  RentalPaymentPurpose,
   RentalPaymentStatus,
   RentalReservationStatus,
   UnitStatus,
@@ -21,7 +19,6 @@ import {
 } from '../../common/utils/pagination.js';
 import { prisma } from '../../config/prisma.js';
 import { env } from '../../config/env.js';
-import { PaymobService } from './paymob.service.js';
 import {
   addDays,
   RENTAL_POLICY,
@@ -1211,133 +1208,25 @@ export class RentalService {
     listingId: RentalIdParams['id'],
     input: TenantPaymentRequestInput,
   ) {
-    PaymobService.ensureConfigured();
+    void listingId;
+    void input;
 
-    const tenantPhone = this.normalizePhone(input.tenantPhone);
-    const listing = await this.getAvailableListingForPayment(listingId);
-
-    const existingUnlock = await prisma.rentalContactUnlock.findUnique({
-      where: {
-        listingId_tenantPhone: {
-          listingId,
-          tenantPhone,
-        },
-      },
-      include: {
-        payments: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-        },
-      },
-    });
-
-    if (existingUnlock?.status === RentalPaymentStatus.PAID) {
-      return {
-        alreadyUnlocked: true,
-        contactUnlock: existingUnlock,
-        payment: null,
-        paymentUrl: null,
-      };
-    }
-
-    const { unlock, payment } = await prisma.$transaction(async (tx) => {
-      const contactUnlock =
-        existingUnlock ??
-        (await tx.rentalContactUnlock.create({
-          data: {
-            listingId: listing.id,
-            compoundId: listing.compoundId,
-            tenantName: input.tenantName,
-            tenantPhone,
-            tenantEmail: input.tenantEmail,
-            amount: listing.contactUnlockFee,
-            currency: RENTAL_POLICY.currency,
-            status: RentalPaymentStatus.INITIATED,
-          },
-        }));
-
-      const latestPayment = existingUnlock?.payments[0];
-
-      if (latestPayment?.paymentUrl && latestPayment.status !== RentalPaymentStatus.FAILED) {
-        return {
-          unlock: contactUnlock,
-          payment: latestPayment,
-        };
-      }
-
-      const createdPayment = await tx.rentalPayment.create({
-        data: {
-          compoundId: listing.compoundId,
-          listingId: listing.id,
-          contactUnlockId: contactUnlock.id,
-          purpose: RentalPaymentPurpose.TENANT_CONTACT_UNLOCK,
-          provider: PaymentProvider.PAYMOB,
-          amount: listing.contactUnlockFee,
-          currency: RENTAL_POLICY.currency,
-          status: RentalPaymentStatus.INITIATED,
-          idempotencyKey: `contact-unlock:${listing.id}:${tenantPhone}:${Date.now()}`,
-        },
-      });
-
-      await tx.rentalContactUnlock.update({
-        where: { id: contactUnlock.id },
-        data: {
-          paymentId: createdPayment.id,
-          status: RentalPaymentStatus.PENDING,
-        },
-      });
-
-      return {
-        unlock: contactUnlock,
-        payment: createdPayment,
-      };
-    });
-
-    if (payment.paymentUrl) {
-      return {
-        alreadyUnlocked: false,
-        contactUnlock: unlock,
-        payment,
-        paymentUrl: payment.paymentUrl,
-      };
-    }
-
-    const intent = await PaymobService.createPaymentIntent({
-      paymentId: payment.id,
-      amount: Number(payment.amount),
-      currency: payment.currency,
-      tenantName: input.tenantName,
-      tenantPhone,
-      tenantEmail: input.tenantEmail,
-      description: `Contact unlock for ${listing.title}`,
-    });
-
-    const updatedPayment = await prisma.rentalPayment.update({
-      where: { id: payment.id },
-      data: {
-        status: RentalPaymentStatus.PENDING,
-        providerOrderId: intent.providerOrderId,
-        paymentUrl: intent.paymentUrl,
-        rawProviderPayload: intent.rawProviderPayload,
-      },
-    });
-
-    return {
-      alreadyUnlocked: false,
-      contactUnlock: unlock,
-      payment: updatedPayment,
-      paymentUrl: updatedPayment.paymentUrl,
-    };
+    throw new AppError(
+      'تم إيقاف الدفع الإلكتروني لهذا النوع من الحجز. يرجى استخدام الحجز عبر واتساب.',
+      410,
+      ErrorCodes.BAD_REQUEST,
+    );
   }
 
   static async getContactAccess(
     listingId: RentalIdParams['id'],
     query: ContactAccessQuery,
   ) {
-    const tenantPhone = this.normalizePhone(query.tenantPhone);
+    void query;
+
     const listing = await prisma.rentalListing.findUnique({
       where: { id: listingId },
-      include: { owner: true },
+      select: { id: true },
     });
 
     if (!listing) {
@@ -1348,29 +1237,9 @@ export class RentalService {
       );
     }
 
-    const unlock = await prisma.rentalContactUnlock.findUnique({
-      where: {
-        listingId_tenantPhone: {
-          listingId,
-          tenantPhone,
-        },
-      },
-    });
-
-    if (!unlock || unlock.status !== RentalPaymentStatus.PAID) {
-      return {
-        unlocked: false,
-        ownerContact: null,
-      };
-    }
-
     return {
-      unlocked: true,
-      ownerContact: {
-        fullName: listing.owner.fullName,
-        phone: listing.owner.phone,
-        email: listing.owner.email,
-      },
+      unlocked: false,
+      ownerContact: null,
     };
   }
 

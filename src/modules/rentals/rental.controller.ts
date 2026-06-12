@@ -248,20 +248,12 @@ export class RentalController {
   });
 
   static startContactUnlockPayment = asyncHandler(async (req: Request, res: Response) => {
+    void res;
     const { id } = req.params as unknown as RentalIdParams;
-    const result = await RentalService.startContactUnlockPayment(
+    await RentalService.startContactUnlockPayment(
       id,
       req.body as TenantPaymentRequestInput,
     );
-
-    successResponse({
-      res,
-      statusCode: result.alreadyUnlocked ? 200 : 201,
-      message: result.alreadyUnlocked
-        ? 'Contact access is already unlocked'
-        : 'Contact unlock payment created successfully',
-      data: result,
-    });
   });
 
   static getContactAccess = asyncHandler(async (req: Request, res: Response) => {

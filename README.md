@@ -166,24 +166,24 @@ Do not commit real environment values. If Cloudinary credentials are missing, ow
 
 ## Rental Marketplace Foundation
 
-The Rental Marketplace module adds a production-oriented backend foundation for listing rental units inside Compound OS. It supports public listing discovery, tenant contact unlock payments, reservation hold payments, admin listing management, Paymob webhook confirmation, reservation conflict protection, and internal ledger entries for confirmed rentals.
+The Rental Marketplace module adds a production-oriented backend foundation for listing rental units inside Compound OS. It supports public listing discovery, WhatsApp-based bed reservation requests, admin listing management, historical Paymob webhook reconciliation, reservation conflict protection, and internal ledger entries for confirmed rentals.
 
 Business defaults:
 - Currency: `EGP`
 - Owner listing publishing fee: `500 EGP`
-- Tenant contact unlock fee: `100 EGP`
-- Reservation hold fee: `1000 EGP`
-- Reservation hold duration after paid webhook: `24 hours`
-- Reservation payment lock window: `10 minutes`
+- Tenant contact unlock fee: legacy only; new rental contact unlock payments are disabled.
+- Reservation hold fee: legacy only; new rental bed reservations do not create payment intents.
+- Reservation hold duration after paid webhook: legacy only.
+- Reservation payment lock window: legacy only.
 - Platform commission on confirmed rental: `10%`
 - Listing publish duration: `30 days`
-- Payment provider: `PAYMOB`
+- Payment provider: legacy rental records may reference `PAYMOB`; new rental reservation flow uses WhatsApp and does not start Paymob.
 
-### Rental Payment Rules
+### Legacy Rental Payment Rules
 
-Payment success is webhook-based. The backend must never trust a frontend callback, redirect, or local UI state as payment confirmation.
+Rental payment initiation is disabled. Historical payment success is still webhook-based for existing records, and the backend must never trust a frontend callback, redirect, or local UI state as payment confirmation.
 
-Contact details are only returned when a `PAID` `RentalContactUnlock` exists for the same listing and tenant phone. Reservation holds use a transaction and listing status lock so a second tenant cannot reserve the same active listing while payment or hold state is active.
+Public contact access no longer returns owner phone or email through rental payment state. Bed reservations use a transaction and bed availability lock so a second tenant cannot reserve the same available bed.
 
 ### Rental Endpoints
 
@@ -193,9 +193,9 @@ Public:
 - `GET /listings`
 - `GET /listings/:slug`
 - `POST /listings/:id/inquiries`
-- `POST /listings/:id/contact-unlock`
-- `GET /listings/:id/contact-access?tenantPhone=...`
-- `POST /listings/:id/reservations`
+- `POST /listings/:id/contact-unlock` (legacy route; returns disabled for new requests)
+- `GET /listings/:id/contact-access?tenantPhone=...` (legacy route; does not expose owner contact for new public flow)
+- `POST /listings/:id/reservations` (WhatsApp bed reservation flow; no payment intent)
 - `GET /reservations/:id`
 - `POST /payments/paymob/webhook`
 
@@ -262,9 +262,9 @@ Content-Type: application/json
 
 Allowed inquiry statuses are the existing `RentalInquiryStatus` values: `NEW`, `CONTACT_UNLOCKED`, `VIEWING_REQUESTED`, `CLOSED`, and `CANCELLED`.
 
-### Paymob Environment
+### Legacy Paymob Environment
 
-Configure these values in deployment when enabling real Paymob payment initiation:
+These values are retained only for historical rental webhook verification or older environments. Do not enable new rental Paymob initiation paths.
 
 ```bash
 PAYMOB_API_KEY=""
@@ -276,7 +276,7 @@ PAYMOB_WEBHOOK_SECRET=""
 PUBLIC_RENTAL_BASE_URL=""
 ```
 
-Do not commit real Paymob secrets. If Paymob credentials are missing, payment-initiation endpoints return a controlled provider-not-configured error and do not fake success.
+Do not commit real Paymob secrets. New rental payment-initiation endpoints are disabled and should not create provider intents.
 
 ### Rental Quality Checks
 
@@ -301,7 +301,7 @@ Current auth status:
 - Resident login is available at `POST /api/v1/auth/resident/login`.
 - Admin login is available at `POST /api/v1/auth/admin/login`.
 - Authenticated user lookup is available at `GET /api/v1/auth/me`.
-- Rental public listing, inquiry, contact-access, payment-initiation, reservation status, and Paymob webhook routes remain public by design.
+- Rental public listing, inquiry, contact-access, reservation status, and legacy Paymob webhook routes remain public by design. Rental payment-initiation routes are disabled and must not create new provider intents.
 - Rental `/admin/*` routes require an authenticated admin role.
 - `/compounds/*`, `/units/*`, `/residents/*`, and `/complaints/*` require an authenticated JWT.
 
@@ -664,7 +664,7 @@ In this phase, we hardened the rental listing content and metadata contracts to 
 
 ### 4. Public API Response Security
 - Public listing endpoints (e.g. `GET /listings` and `GET /listings/:slug`) do not expose sensitive owner contacts (`owner.phone`, `owner.email`, `owner.nationalId`, `owner.whatsapp`).
-- Access to owner contact is only unlocked upon a verified contact-unlock payment.
+- Owner contact remains hidden from public rental responses. The current bed reservation flow uses WhatsApp review and does not unlock owner phone or email through payment.
 
 ### 5. Amenities & Currency Status
 - **Amenities / Features**: Amenities are not supported in the database schema in this phase. Implementing them will require a dedicated database schema and migration phase in the future.
