@@ -3054,6 +3054,7 @@ export class RentalService {
       status === RentalListingStatus.RESERVED
     ) {
       status = RentalListingStatus.ACTIVE;
+      isPublished = true;
     }
 
     const updatedListing = await tx.rentalListing.update({
