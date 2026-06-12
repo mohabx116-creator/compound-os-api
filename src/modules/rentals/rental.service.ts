@@ -24,7 +24,6 @@ import { env } from '../../config/env.js';
 import { PaymobService } from './paymob.service.js';
 import {
   addDays,
-  addMinutes,
   RENTAL_POLICY,
 } from './rental-policy.js';
 import { withOptimizedRentalImages } from './rental-image-urls.js';
@@ -1131,6 +1130,20 @@ export class RentalService {
         !listing.isPublished ||
         isExpired
       ) {
+        if (!isExpired) {
+          const availableBedCount = await tx.rentalBed.count({
+            where: { listingId, status: RentalBedStatus.AVAILABLE },
+          });
+          if (availableBedCount === 0) {
+            await this.syncListingCountersFromBeds(listingId, tx);
+            throw new AppError(
+              'لا توجد سراير متاحة لهذا الإعلان',
+              409,
+              ErrorCodes.RENTAL_INQUIRY_LISTING_UNAVAILABLE,
+            );
+          }
+        }
+
         throw new AppError(
           'Rental listing is not available for inquiries',
           409,
@@ -1138,8 +1151,9 @@ export class RentalService {
         );
       }
 
-      const availableBeds = await tx.$queryRaw<Array<{ id: string }>>`
+      const availableBeds = await tx.$queryRaw<Array<{ id: string; bedNumber: number }>>`
         SELECT id
+             , bed_number AS "bedNumber"
         FROM rental_beds
         WHERE listing_id = ${listingId}
           AND status = 'AVAILABLE'::"RentalBedStatus"
@@ -1151,7 +1165,7 @@ export class RentalService {
 
       if (!selectedBedId) {
         throw new AppError(
-          'Rental listing is not available for inquiries',
+          'لا توجد سراير متاحة لهذا الإعلان',
           409,
           ErrorCodes.RENTAL_INQUIRY_LISTING_UNAVAILABLE,
         );
@@ -1181,9 +1195,13 @@ export class RentalService {
           reservationId: null,
         },
       });
-      await this.syncListingCountersFromBeds(listingId, tx);
+      const syncedListing = await this.syncListingCountersFromBeds(listingId, tx);
 
-      return inquiry;
+      return {
+        ...inquiry,
+        bedNumber: availableBeds[0].bedNumber,
+        remainingAvailableBeds: syncedListing.availableBeds,
+      };
     });
 
     return inquiry;
@@ -1360,25 +1378,43 @@ export class RentalService {
     listingId: RentalIdParams['id'],
     input: TenantPaymentRequestInput,
   ) {
-    PaymobService.ensureConfigured();
-
     const tenantPhone = this.normalizePhone(input.tenantPhone);
     const now = new Date();
-    const lockExpiresAt = addMinutes(now, RENTAL_POLICY.reservationPaymentLockMinutes);
 
-    const { listing, reservation, payment } = await prisma.$transaction(async (tx) => {
-      await this.expireListingReservationsInTransaction(tx, listingId, now);
-
-      const listingForPayment = await tx.rentalListing.findFirst({
-        where: {
-          id: listingId,
-          status: RentalListingStatus.ACTIVE,
-          isPublished: true,
-          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-        },
+    return prisma.$transaction(async (tx) => {
+      const listingForReservation = await tx.rentalListing.findUnique({
+        where: { id: listingId },
       });
 
-      if (!listingForPayment) {
+      if (!listingForReservation) {
+        throw new AppError(
+          'Rental listing not found',
+          404,
+          ErrorCodes.RENTAL_LISTING_NOT_FOUND,
+        );
+      }
+
+      const isExpired = listingForReservation.expiresAt !== null && listingForReservation.expiresAt <= now;
+
+      if (
+        listingForReservation.status !== RentalListingStatus.ACTIVE ||
+        !listingForReservation.isPublished ||
+        isExpired
+      ) {
+        if (!isExpired) {
+          const availableBedCount = await tx.rentalBed.count({
+            where: { listingId, status: RentalBedStatus.AVAILABLE },
+          });
+          if (availableBedCount === 0) {
+            await this.syncListingCountersFromBeds(listingId, tx);
+            throw new AppError(
+              'لا توجد سراير متاحة لهذا الإعلان',
+              409,
+              ErrorCodes.RENTAL_LISTING_NOT_AVAILABLE,
+            );
+          }
+        }
+
         throw new AppError(
           'Rental listing is not available',
           409,
@@ -1386,113 +1422,60 @@ export class RentalService {
         );
       }
 
-      const activeReservation = await tx.rentalReservation.findFirst({
-        where: {
-          listingId,
-          status: { in: activeReservationStatuses },
-          OR: [{ reservedUntil: null }, { reservedUntil: { gt: now } }],
-        },
-      });
+      const availableBeds = await tx.$queryRaw<Array<{ id: string; bedNumber: number }>>`
+        SELECT id
+             , bed_number AS "bedNumber"
+        FROM rental_beds
+        WHERE listing_id = ${listingId}
+          AND status = 'AVAILABLE'::"RentalBedStatus"
+        ORDER BY bed_number ASC
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED
+      `;
+      const selectedBed = availableBeds[0];
 
-      if (activeReservation) {
+      if (!selectedBed) {
+        await this.syncListingCountersFromBeds(listingId, tx);
         throw new AppError(
-          'Rental listing already has an active reservation',
+          'لا توجد سراير متاحة لهذا الإعلان',
           409,
-          ErrorCodes.RENTAL_RESERVATION_CONFLICT,
-        );
-      }
-
-      const lockResult = await tx.rentalListing.updateMany({
-        where: {
-          id: listingId,
-          status: RentalListingStatus.ACTIVE,
-          isPublished: true,
-          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-        },
-        data: {
-          status: RentalListingStatus.PAYMENT_LOCKED,
-          reservedUntil: lockExpiresAt,
-        },
-      });
-
-      if (lockResult.count !== 1) {
-        throw new AppError(
-          'Rental listing already has an active reservation',
-          409,
-          ErrorCodes.RENTAL_RESERVATION_CONFLICT,
+          ErrorCodes.RENTAL_LISTING_NOT_AVAILABLE,
         );
       }
 
       const createdReservation = await tx.rentalReservation.create({
         data: {
-          listingId: listingForPayment.id,
-          compoundId: listingForPayment.compoundId,
+          listingId: listingForReservation.id,
+          compoundId: listingForReservation.compoundId,
           tenantName: input.tenantName,
           tenantPhone,
           tenantEmail: input.tenantEmail,
-          amount: listingForPayment.reservationFee,
+          amount: 0,
           currency: RENTAL_POLICY.currency,
-          status: RentalReservationStatus.PAYMENT_LOCKED,
-          reservedUntil: lockExpiresAt,
+          status: RentalReservationStatus.RESERVED,
+          reservedUntil: null,
         },
       });
 
-      const createdPayment = await tx.rentalPayment.create({
+      await tx.rentalBed.update({
+        where: { id: selectedBed.id },
         data: {
-          compoundId: listingForPayment.compoundId,
-          listingId: listingForPayment.id,
+          status: RentalBedStatus.RESERVED,
           reservationId: createdReservation.id,
-          purpose: RentalPaymentPurpose.TENANT_RESERVATION_HOLD,
-          provider: PaymentProvider.PAYMOB,
-          amount: listingForPayment.reservationFee,
-          currency: RENTAL_POLICY.currency,
-          status: RentalPaymentStatus.INITIATED,
-          idempotencyKey: `reservation-hold:${listingForPayment.id}:${createdReservation.id}`,
+          inquiryId: null,
         },
       });
 
-      await tx.rentalReservation.update({
-        where: { id: createdReservation.id },
-        data: { paymentId: createdPayment.id },
-      });
+      const syncedListing = await this.syncListingCountersFromBeds(listingId, tx);
 
       return {
-        listing: listingForPayment,
         reservation: createdReservation,
-        payment: createdPayment,
+        payment: null,
+        paymentUrl: null,
+        bedNumber: selectedBed.bedNumber,
+        remainingAvailableBeds: syncedListing.availableBeds,
       };
     });
-
-    try {
-      const intent = await PaymobService.createPaymentIntent({
-        paymentId: payment.id,
-        amount: Number(payment.amount),
-        currency: payment.currency,
-        tenantName: input.tenantName,
-        tenantPhone,
-        tenantEmail: input.tenantEmail,
-        description: `Reservation hold for ${listing.title}`,
-      });
-
-      const updatedPayment = await prisma.rentalPayment.update({
-        where: { id: payment.id },
-        data: {
-          status: RentalPaymentStatus.PENDING,
-          providerOrderId: intent.providerOrderId,
-          paymentUrl: intent.paymentUrl,
-          rawProviderPayload: intent.rawProviderPayload,
-        },
-      });
-
-      return {
-        reservation,
-        payment: updatedPayment,
-        paymentUrl: updatedPayment.paymentUrl,
-      };
-    } catch (error) {
-      await this.releaseReservationPaymentLock(reservation.id, payment.id, listing.id);
-      throw error;
-    }
   }
 
   static async getReservationById(id: RentalIdParams['id']) {

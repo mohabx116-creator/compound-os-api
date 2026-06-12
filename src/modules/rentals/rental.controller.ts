@@ -288,7 +288,7 @@ export class RentalController {
     successResponse({
       res,
       statusCode: 201,
-      message: 'Reservation payment created successfully',
+      message: 'Rental bed reservation created successfully',
       data: result,
     });
   });
