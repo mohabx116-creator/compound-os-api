@@ -102,6 +102,7 @@ export interface RentalInquiryParams {
 
 export interface UpdateRentalInquiryStatusInput {
   status: RentalInquiryStatus;
+  bedId?: string;
 }
 
 export interface UpdateRentalBedStatusInput {

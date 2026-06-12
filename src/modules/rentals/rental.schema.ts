@@ -178,6 +178,7 @@ export const rentalInquiryParamsSchema = z.object({
 export const updateRentalInquiryStatusSchema = z
   .object({
     status: rentalInquiryStatusSchema,
+    bedId: z.string().trim().min(1, 'Invalid bed id').max(100, 'Invalid bed id').optional(),
   })
   .strict();
 

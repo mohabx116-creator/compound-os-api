@@ -1760,6 +1760,14 @@ export class RentalService {
       );
     }
 
+    if (newStatus === RentalInquiryStatus.CLOSED && !input.bedId) {
+      throw new AppError(
+        'A bed must be selected before accepting the inquiry',
+        400,
+        ErrorCodes.BAD_REQUEST,
+      );
+    }
+
     const updatedInquiry = await prisma.$transaction(async (tx) => {
       // Row-level lock on the rental listing to prevent concurrent modifications
       await tx.$executeRaw`
@@ -1774,68 +1782,81 @@ export class RentalService {
         throw new AppError('Listing associated with inquiry not found', 404, ErrorCodes.RENTAL_LISTING_NOT_FOUND);
       }
 
-      let newPendingBeds = listing.pendingBeds;
-      let newRentedBeds = listing.rentedBeds;
+      if (newStatus === RentalInquiryStatus.CLOSED) {
+        const selectedBed = await tx.rentalBed.findUnique({
+          where: { id: input.bedId },
+          select: adminBedSelect,
+        });
 
-      if (isCurrentPending && isNewResolved) {
-        if (newStatus === RentalInquiryStatus.CLOSED) {
-          if (listing.pendingBeds <= 0) {
-            throw new AppError('Cannot accept inquiry: pending beds is 0', 409, ErrorCodes.CONFLICT);
-          }
-          if (listing.rentedBeds >= listing.totalBeds) {
-            throw new AppError('Cannot accept inquiry: rented beds would exceed total beds', 409, ErrorCodes.CONFLICT);
-          }
-          newPendingBeds = Math.max(listing.pendingBeds - 1, 0);
-          newRentedBeds = listing.rentedBeds + 1;
-        } else if (newStatus === RentalInquiryStatus.CANCELLED) {
-          if (listing.pendingBeds <= 0) {
-            throw new AppError('Cannot reject/cancel inquiry: pending beds is 0', 409, ErrorCodes.CONFLICT);
-          }
-          newPendingBeds = Math.max(listing.pendingBeds - 1, 0);
+        if (!selectedBed) {
+          throw new AppError('Selected rental bed not found', 404, ErrorCodes.NOT_FOUND);
         }
+
+        if (selectedBed.listingId !== inquiry.listingId) {
+          throw new AppError(
+            'Selected bed does not belong to this inquiry listing',
+            400,
+            ErrorCodes.BAD_REQUEST,
+          );
+        }
+
+        if (
+          selectedBed.status !== RentalBedStatus.AVAILABLE &&
+          selectedBed.status !== RentalBedStatus.RESERVED
+        ) {
+          throw new AppError(
+            'Selected bed must be available or temporarily reserved',
+            400,
+            ErrorCodes.BAD_REQUEST,
+          );
+        }
+
+        if (
+          selectedBed.status === RentalBedStatus.RESERVED &&
+          selectedBed.inquiryId &&
+          selectedBed.inquiryId !== inquiry.id
+        ) {
+          throw new AppError(
+            'Selected reserved bed is linked to another inquiry',
+            400,
+            ErrorCodes.BAD_REQUEST,
+          );
+        }
+
+        await tx.rentalBed.update({
+          where: { id: selectedBed.id },
+          data: {
+            status: RentalBedStatus.RENTED,
+            inquiryId: inquiry.id,
+            reservationId: null,
+          },
+        });
+      } else if (newStatus === RentalInquiryStatus.CANCELLED) {
+        await tx.rentalBed.updateMany({
+          where: {
+            listingId: inquiry.listingId,
+            inquiryId: inquiry.id,
+            status: RentalBedStatus.RESERVED,
+          },
+          data: {
+            status: RentalBedStatus.AVAILABLE,
+            inquiryId: null,
+            reservationId: null,
+          },
+        });
       }
 
-      const totalBeds = listing.totalBeds;
-      const availableBeds = Math.max(totalBeds - newPendingBeds - newRentedBeds, 0);
-
-      let listingStatus = listing.status;
-      let isPublished = listing.isPublished;
-
-      if (newRentedBeds >= totalBeds) {
-        listingStatus = RentalListingStatus.RENTED;
-        isPublished = false;
-      } else if (availableBeds > 0) {
-        listingStatus = RentalListingStatus.ACTIVE;
-        isPublished = true;
-      } else if (availableBeds === 0) {
-        listingStatus = RentalListingStatus.RESERVED;
-        isPublished = false;
-      }
-
-      this.validateListingBeds(
-        listingStatus,
-        isPublished,
-        totalBeds,
-        newPendingBeds,
-        newRentedBeds
-      );
-
-      await tx.rentalListing.update({
-        where: { id: listing.id },
-        data: {
-          pendingBeds: newPendingBeds,
-          rentedBeds: newRentedBeds,
-          status: listingStatus,
-          isPublished,
-          reservedUntil: listingStatus === RentalListingStatus.ACTIVE ? null : listing.reservedUntil,
-        },
-      });
-
-      return tx.rentalInquiry.update({
+      const updated = await tx.rentalInquiry.update({
         where: { id },
         data: { status: newStatus },
         select: adminInquirySelect,
       });
+
+      if (newStatus === RentalInquiryStatus.CLOSED || newStatus === RentalInquiryStatus.CANCELLED) {
+        await this.syncListingCountersFromBeds(inquiry.listingId, tx);
+      }
+
+      return updated;
     });
 
     return this.addAvailableBedsToInquiry(updatedInquiry);
