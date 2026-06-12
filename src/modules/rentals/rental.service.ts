@@ -1138,18 +1138,18 @@ export class RentalService {
         );
       }
 
-      // Atomic update using raw SQL conditional increment
-      const updateCount = await tx.$executeRaw`
-        UPDATE rental_listings
-        SET pending_beds = pending_beds + 1
-        WHERE id = ${listingId}
-          AND status = 'ACTIVE'::"RentalListingStatus"
-          AND is_published = true
-          AND (expires_at IS NULL OR expires_at > NOW())
-          AND total_beds > pending_beds + rented_beds
+      const availableBeds = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id
+        FROM rental_beds
+        WHERE listing_id = ${listingId}
+          AND status = 'AVAILABLE'::"RentalBedStatus"
+        ORDER BY bed_number ASC
+        LIMIT 1
+        FOR UPDATE
       `;
+      const selectedBedId = availableBeds[0]?.id;
 
-      if (updateCount !== 1) {
+      if (!selectedBedId) {
         throw new AppError(
           'Rental listing is not available for inquiries',
           409,
@@ -1157,34 +1157,7 @@ export class RentalService {
         );
       }
 
-      // Check if listing has reached 0 available beds to mark it as reserved
-      const updatedListing = await tx.rentalListing.findUnique({
-        where: { id: listingId },
-        select: {
-          totalBeds: true,
-          pendingBeds: true,
-          rentedBeds: true,
-        },
-      });
-
-      if (updatedListing) {
-        const availableBeds = Math.max(
-          updatedListing.totalBeds - updatedListing.pendingBeds - updatedListing.rentedBeds,
-          0
-        );
-        if (availableBeds === 0) {
-          await tx.rentalListing.update({
-            where: { id: listingId },
-            data: {
-              status: RentalListingStatus.RESERVED,
-              isPublished: false,
-              reservedUntil: null,
-            },
-          });
-        }
-      }
-
-      return tx.rentalInquiry.create({
+      const inquiry = await tx.rentalInquiry.create({
         data: {
           listingId: listing.id,
           compoundId: listing.compoundId,
@@ -1199,6 +1172,18 @@ export class RentalService {
           status: true,
         },
       });
+
+      await tx.rentalBed.update({
+        where: { id: selectedBedId },
+        data: {
+          status: RentalBedStatus.RESERVED,
+          inquiryId: inquiry.id,
+          reservationId: null,
+        },
+      });
+      await this.syncListingCountersFromBeds(listingId, tx);
+
+      return inquiry;
     });
 
     return inquiry;
