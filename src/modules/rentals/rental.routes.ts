@@ -12,6 +12,8 @@ import {
   createOwnerSubmissionSchema,
   createRentalInquirySchema,
   createRentalOwnerSchema,
+  rentalBedParamsSchema,
+  rentalListingBedsParamsSchema,
   ownerSubmissionParamsSchema,
   ownerSubmissionQuerySchema,
   rentalInquiryParamsSchema,
@@ -22,6 +24,7 @@ import {
   rentalListQuerySchema,
   rentalSlugParamsSchema,
   tenantPaymentRequestSchema,
+  updateRentalBedStatusSchema,
   updateOwnerSubmissionStatusSchema,
   updateRentalInquiryStatusSchema,
   updateRentalOwnerSchema,
@@ -234,6 +237,27 @@ router.get(
   ...requireRentalAdmin,
   validate({ params: rentalIdParamsSchema }),
   RentalController.getAdminListingById,
+);
+
+router.get(
+  '/admin/listings/:listingId/beds',
+  ...requireRentalAdmin,
+  validate({ params: rentalListingBedsParamsSchema }),
+  RentalController.listAdminListingBeds,
+);
+
+router.post(
+  '/admin/listings/:listingId/beds/sync-counters',
+  ...requireRentalAdmin,
+  validate({ params: rentalListingBedsParamsSchema }),
+  RentalController.syncAdminListingBedCounters,
+);
+
+router.patch(
+  '/admin/beds/:bedId/status',
+  ...requireRentalAdmin,
+  validate({ params: rentalBedParamsSchema, body: updateRentalBedStatusSchema }),
+  RentalController.updateAdminBedStatus,
 );
 
 router.post(

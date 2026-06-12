@@ -1,5 +1,6 @@
 import type {
   RentalFurnishingStatus,
+  RentalBedStatus,
   RentalInquiryStatus,
   RentalListingStatus,
   RentalListingType,
@@ -35,6 +36,14 @@ export interface RentalOwnerQuery {
 
 export interface RentalIdParams {
   id: string;
+}
+
+export interface RentalListingBedsParams {
+  listingId: string;
+}
+
+export interface RentalBedParams {
+  bedId: string;
 }
 
 export interface RentalOwnerParams {
@@ -93,6 +102,13 @@ export interface RentalInquiryParams {
 
 export interface UpdateRentalInquiryStatusInput {
   status: RentalInquiryStatus;
+}
+
+export interface UpdateRentalBedStatusInput {
+  status: RentalBedStatus;
+  notes?: string;
+  inquiryId?: string | null;
+  reservationId?: string | null;
 }
 
 export interface AdminListingImageInput {

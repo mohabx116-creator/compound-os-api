@@ -12,9 +12,11 @@ import type {
   CreateRentalOwnerInput,
   CreateRentalInquiryInput,
   CreateOwnerSubmissionInput,
+  RentalBedParams,
   RentalIdParams,
   RentalInquiryParams,
   RentalInquiryQuery,
+  RentalListingBedsParams,
   RentalListQuery,
   OwnerSubmissionParams,
   OwnerSubmissionQuery,
@@ -23,6 +25,7 @@ import type {
   RentalSlugParams,
   TenantPaymentRequestInput,
   UpdateOwnerSubmissionStatusInput,
+  UpdateRentalBedStatusInput,
   UpdateRentalInquiryStatusInput,
   UpdateRentalOwnerInput,
 } from './rental.types.js';
@@ -321,6 +324,42 @@ export class RentalController {
     successResponse({
       res,
       message: 'Admin rental listing retrieved successfully',
+      data: listing,
+    });
+  });
+
+  static listAdminListingBeds = asyncHandler(async (req: Request, res: Response) => {
+    const { listingId } = req.params as unknown as RentalListingBedsParams;
+    const beds = await RentalService.listAdminListingBeds(listingId);
+
+    successResponse({
+      res,
+      message: 'Rental listing beds retrieved successfully',
+      data: beds,
+    });
+  });
+
+  static updateAdminBedStatus = asyncHandler(async (req: Request, res: Response) => {
+    const { bedId } = req.params as unknown as RentalBedParams;
+    const result = await RentalService.updateAdminBedStatus(
+      bedId,
+      req.body as UpdateRentalBedStatusInput,
+    );
+
+    successResponse({
+      res,
+      message: 'Rental bed status updated successfully',
+      data: result,
+    });
+  });
+
+  static syncAdminListingBedCounters = asyncHandler(async (req: Request, res: Response) => {
+    const { listingId } = req.params as unknown as RentalListingBedsParams;
+    const listing = await RentalService.syncListingCountersFromBeds(listingId);
+
+    successResponse({
+      res,
+      message: 'Rental listing bed counters synchronized successfully',
       data: listing,
     });
   });

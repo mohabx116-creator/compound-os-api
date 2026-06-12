@@ -66,6 +66,12 @@ const listingStatusSchema = z.enum([
   'REJECTED',
   'REMOVED',
 ]);
+const rentalBedStatusSchema = z.enum([
+  'AVAILABLE',
+  'RESERVED',
+  'RENTED',
+  'OUT_OF_SERVICE',
+]);
 
 const rentalListQueryBaseSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -117,6 +123,14 @@ export const rentalIdParamsSchema = z.object({
   id: z.string().uuid('Invalid id'),
 });
 
+export const rentalListingBedsParamsSchema = z.object({
+  listingId: z.string().uuid('Invalid listing id'),
+});
+
+export const rentalBedParamsSchema = z.object({
+  bedId: z.string().trim().min(1, 'Invalid bed id').max(100, 'Invalid bed id'),
+});
+
 export const rentalOwnerParamsSchema = z.object({
   id: z.string().uuid('Invalid owner id'),
 });
@@ -164,6 +178,15 @@ export const rentalInquiryParamsSchema = z.object({
 export const updateRentalInquiryStatusSchema = z
   .object({
     status: rentalInquiryStatusSchema,
+  })
+  .strict();
+
+export const updateRentalBedStatusSchema = z
+  .object({
+    status: rentalBedStatusSchema,
+    notes: optionalText(2000),
+    inquiryId: z.string().uuid('Invalid inquiry id').nullable().optional(),
+    reservationId: z.string().uuid('Invalid reservation id').nullable().optional(),
   })
   .strict();
 

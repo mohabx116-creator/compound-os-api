@@ -48,6 +48,7 @@ import type {
   RentalSlugParams,
   TenantPaymentRequestInput,
   UpdateOwnerSubmissionStatusInput,
+  UpdateRentalBedStatusInput,
   UpdateRentalInquiryStatusInput,
   UpdateRentalOwnerInput,
 } from './rental.types.js';
@@ -162,6 +163,18 @@ const adminListingInclude = {
     orderBy: { bedNumber: 'asc' },
   },
 } satisfies Prisma.RentalListingInclude;
+
+const adminBedSelect = {
+  id: true,
+  listingId: true,
+  bedNumber: true,
+  status: true,
+  inquiryId: true,
+  reservationId: true,
+  notes: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.RentalBedSelect;
 
 const adminOwnerSelect = {
   id: true,
@@ -354,6 +367,28 @@ const confirmableReservationStatuses: RentalReservationStatus[] = [
   RentalReservationStatus.RESERVED,
   RentalReservationStatus.PAID_PENDING_CONFIRMATION,
 ];
+
+const allowedBedStatusTransitions: Record<RentalBedStatus, RentalBedStatus[]> = {
+  [RentalBedStatus.AVAILABLE]: [
+    RentalBedStatus.RESERVED,
+    RentalBedStatus.RENTED,
+    RentalBedStatus.OUT_OF_SERVICE,
+  ],
+  [RentalBedStatus.RESERVED]: [
+    RentalBedStatus.AVAILABLE,
+    RentalBedStatus.RENTED,
+    RentalBedStatus.OUT_OF_SERVICE,
+  ],
+  [RentalBedStatus.RENTED]: [
+    RentalBedStatus.AVAILABLE,
+    RentalBedStatus.OUT_OF_SERVICE,
+  ],
+  [RentalBedStatus.OUT_OF_SERVICE]: [
+    RentalBedStatus.AVAILABLE,
+  ],
+};
+
+type RentalPrismaClient = Prisma.TransactionClient | typeof prisma;
 
 function createCloudinaryUploadSignatureForFolder(folder: string) {
   if (
@@ -1560,6 +1595,92 @@ export class RentalService {
     return this.addAvailableBeds(listing);
   }
 
+  static async listAdminListingBeds(listingId: string) {
+    const listing = await prisma.rentalListing.findUnique({
+      where: { id: listingId },
+      select: { id: true },
+    });
+
+    if (!listing) {
+      throw new AppError(
+        'Rental listing not found',
+        404,
+        ErrorCodes.RENTAL_LISTING_NOT_FOUND,
+      );
+    }
+
+    return prisma.rentalBed.findMany({
+      where: { listingId },
+      select: adminBedSelect,
+      orderBy: { bedNumber: 'asc' },
+    });
+  }
+
+  static async updateAdminBedStatus(
+    bedId: string,
+    input: UpdateRentalBedStatusInput,
+  ) {
+    if (!Object.values(RentalBedStatus).includes(input.status)) {
+      throw new AppError('Invalid rental bed status', 400, ErrorCodes.BAD_REQUEST);
+    }
+
+    return prisma.$transaction(async (tx) => {
+      const bed = await tx.rentalBed.findUnique({
+        where: { id: bedId },
+        select: adminBedSelect,
+      });
+
+      if (!bed) {
+        throw new AppError('Rental bed not found', 404, ErrorCodes.NOT_FOUND);
+      }
+
+      const targetStatus = input.status;
+      const isSameStatus = bed.status === targetStatus;
+      if (
+        !isSameStatus &&
+        !allowedBedStatusTransitions[bed.status].includes(targetStatus)
+      ) {
+        throw new AppError(
+          `Cannot transition rental bed from ${bed.status} to ${targetStatus}`,
+          409,
+          ErrorCodes.CONFLICT,
+        );
+      }
+
+      const hasNotes = Object.prototype.hasOwnProperty.call(input, 'notes');
+      const hasInquiryId = Object.prototype.hasOwnProperty.call(input, 'inquiryId');
+      const hasReservationId = Object.prototype.hasOwnProperty.call(input, 'reservationId');
+      const data: Prisma.RentalBedUncheckedUpdateInput = {
+        status: targetStatus,
+        ...(hasNotes ? { notes: input.notes ?? null } : {}),
+      };
+
+      if (
+        targetStatus === RentalBedStatus.AVAILABLE ||
+        targetStatus === RentalBedStatus.OUT_OF_SERVICE
+      ) {
+        data.inquiryId = null;
+        data.reservationId = null;
+      } else {
+        if (hasInquiryId) data.inquiryId = input.inquiryId;
+        if (hasReservationId) data.reservationId = input.reservationId;
+      }
+
+      const updatedBed = await tx.rentalBed.update({
+        where: { id: bed.id },
+        data,
+        select: adminBedSelect,
+      });
+
+      const listing = await this.syncListingCountersFromBeds(bed.listingId, tx);
+
+      return {
+        bed: updatedBed,
+        listing,
+      };
+    });
+  }
+
   static async listAdminInquiries(query: RentalInquiryQuery) {
     const where = this.buildAdminInquiryWhere(query);
 
@@ -1830,7 +1951,7 @@ export class RentalService {
         include: adminListingInclude,
       });
       await RentalService.syncListingBeds(tx, listing.id, listing.totalBeds);
-      return this.addAvailableBeds(listing);
+      return RentalService.syncListingCountersFromBeds(listing.id, tx);
     });
   }
 
@@ -1947,7 +2068,7 @@ export class RentalService {
         include: adminListingInclude,
       });
       await RentalService.syncListingBeds(tx, listing.id, listing.totalBeds);
-      return this.addAvailableBeds(listing);
+      return RentalService.syncListingCountersFromBeds(listing.id, tx);
     });
   }
 
@@ -2823,6 +2944,7 @@ export class RentalService {
         include: adminListingInclude,
       });
       await RentalService.syncListingBeds(tx, listing.id, listing.totalBeds);
+      const syncedListing = await RentalService.syncListingCountersFromBeds(listing.id, tx);
 
       const updatedSubmission = await tx.rentalOwnerSubmission.update({
         where: { id: submission.id },
@@ -2835,16 +2957,12 @@ export class RentalService {
 
       return {
         submission: updatedSubmission,
-        listing: {
-          ...listing,
-          availableBeds: Math.max((listing.totalBeds ?? 4) - (listing.pendingBeds ?? 0) - (listing.rentedBeds ?? 0), 0),
-        },
+        listing: syncedListing,
       };
     });
   }
 
   public static computeBedCountsFromBeds(beds: Array<{ status: RentalBedStatus }>) {
-    let totalBeds = beds.length;
     let availableBeds = 0;
     let pendingBeds = 0;
     let rentedBeds = 0;
@@ -2867,6 +2985,8 @@ export class RentalService {
       }
     }
 
+    const totalBeds = availableBeds + pendingBeds + rentedBeds;
+
     return {
       totalBeds,
       availableBeds,
@@ -2874,6 +2994,77 @@ export class RentalService {
       rentedBeds,
       outOfServiceBeds,
     };
+  }
+
+  public static async syncListingCountersFromBeds(
+    listingId: string,
+    tx: RentalPrismaClient = prisma,
+  ) {
+    const listing = await tx.rentalListing.findUnique({
+      where: { id: listingId },
+      select: {
+        id: true,
+        status: true,
+        isPublished: true,
+      },
+    });
+
+    if (!listing) {
+      throw new AppError(
+        'Rental listing not found',
+        404,
+        ErrorCodes.RENTAL_LISTING_NOT_FOUND,
+      );
+    }
+
+    const groupedCounts = await tx.rentalBed.groupBy({
+      by: ['status'],
+      where: { listingId },
+      _count: { _all: true },
+    });
+
+    const countByStatus = new Map<RentalBedStatus, number>(
+      groupedCounts.map((item) => [item.status, item._count._all]),
+    );
+    const availableBeds = countByStatus.get(RentalBedStatus.AVAILABLE) ?? 0;
+    const pendingBeds = countByStatus.get(RentalBedStatus.RESERVED) ?? 0;
+    const rentedBeds = countByStatus.get(RentalBedStatus.RENTED) ?? 0;
+    const totalBeds = availableBeds + pendingBeds + rentedBeds;
+
+    let status = listing.status;
+    let isPublished = listing.isPublished;
+
+    if (availableBeds === 0) {
+      isPublished = false;
+      if (totalBeds === 0) {
+        status = RentalListingStatus.SUSPENDED;
+      } else if (rentedBeds === totalBeds) {
+        status = RentalListingStatus.RENTED;
+      } else if (pendingBeds > 0) {
+        status = RentalListingStatus.RESERVED;
+      }
+    } else if (
+      status === RentalListingStatus.RENTED ||
+      status === RentalListingStatus.RESERVED
+    ) {
+      status = RentalListingStatus.ACTIVE;
+    }
+
+    const updatedListing = await tx.rentalListing.update({
+      where: { id: listingId },
+      data: {
+        totalBeds,
+        pendingBeds,
+        rentedBeds,
+        status,
+        isPublished,
+      },
+      include: adminListingInclude,
+    });
+
+    publicListingsCache.clear();
+
+    return this.addAvailableBeds(updatedListing);
   }
 
   public static async syncListingBeds(
@@ -2890,14 +3081,21 @@ export class RentalService {
       orderBy: { bedNumber: 'asc' },
     });
 
-    const currentCount = currentBeds.length;
+    const currentActiveCount = currentBeds.filter(
+      (bed) => bed.status !== RentalBedStatus.OUT_OF_SERVICE,
+    ).length;
+    const maxBedNumber = currentBeds.reduce(
+      (max, bed) => Math.max(max, bed.bedNumber),
+      0,
+    );
 
-    if (targetTotalBeds > currentCount) {
+    if (targetTotalBeds > currentActiveCount) {
       const bedsToCreate = [];
-      for (let num = currentCount + 1; num <= targetTotalBeds; num++) {
+      const bedsToAdd = targetTotalBeds - currentActiveCount;
+      for (let index = 1; index <= bedsToAdd; index++) {
         bedsToCreate.push({
           listingId,
-          bedNumber: num,
+          bedNumber: maxBedNumber + index,
           status: RentalBedStatus.AVAILABLE,
         });
       }
@@ -2906,8 +3104,8 @@ export class RentalService {
           data: bedsToCreate,
         });
       }
-    } else if (targetTotalBeds < currentCount) {
-      let excessCount = currentCount - targetTotalBeds;
+    } else if (targetTotalBeds < currentActiveCount) {
+      let excessCount = currentActiveCount - targetTotalBeds;
       const bedsToDelete = [];
 
       for (let idx = currentBeds.length - 1; idx >= 0; idx--) {
