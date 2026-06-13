@@ -2725,7 +2725,7 @@ export class RentalService {
       throw new AppError(
         'Client request id is already used for another rental request',
         409,
-        ErrorCodes.CONFLICT,
+        ErrorCodes.RENTAL_REQUEST_ALREADY_RESERVED_BED,
       );
     }
   }
