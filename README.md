@@ -166,6 +166,8 @@ Do not commit real environment values. If Cloudinary credentials are missing, ow
 
 ## Rental Marketplace Foundation
 
+> ?? **?????? ??? ??????? ????????:** [\docs/RENTAL_BED_FLOW_RELEASE_NOTES.md\](./docs/RENTAL_BED_FLOW_RELEASE_NOTES.md)
+
 The Rental Marketplace module adds a production-oriented backend foundation for listing rental units inside Compound OS. It supports public listing discovery, WhatsApp-based bed reservation requests, admin listing management, historical Paymob webhook reconciliation, reservation conflict protection, and internal ledger entries for confirmed rentals.
 
 Business defaults:
