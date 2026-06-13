@@ -1090,12 +1090,14 @@ export class RentalService {
     input: CreateRentalInquiryInput,
   ) {
     const tenantPhone = this.normalizePhone(input.tenantPhone);
+    const clientRequestId = input.clientRequestId;
     const status =
       input.inquiryType === 'VIEWING_REQUEST'
         ? RentalInquiryStatus.VIEWING_REQUESTED
         : RentalInquiryStatus.NEW;
 
-    const inquiry = await prisma.$transaction(async (tx) => {
+    try {
+      return await prisma.$transaction(async (tx) => {
       const listing = await tx.rentalListing.findUnique({
         where: { id: listingId },
         select: {
@@ -1120,16 +1122,16 @@ export class RentalService {
         );
       }
 
-      await this.lockPublicBedRequest(tx, listingId, tenantPhone);
+      if (clientRequestId) {
+        const existingInquiry = await this.findExistingClientInquiryBedRequest(tx, clientRequestId, {
+          listingId,
+          tenantName: input.tenantName,
+          tenantPhone,
+        });
 
-      const existingInquiry = await this.findExistingActiveInquiryBedRequest(
-        tx,
-        listingId,
-        tenantPhone,
-      );
-
-      if (existingInquiry) {
-        return existingInquiry;
+        if (existingInquiry) {
+          return existingInquiry;
+        }
       }
 
       const isExpired = listing.expiresAt !== null && listing.expiresAt <= new Date();
@@ -1182,6 +1184,7 @@ export class RentalService {
 
       const inquiry = await tx.rentalInquiry.create({
         data: {
+          id: clientRequestId,
           listingId: listing.id,
           compoundId: listing.compoundId,
           tenantName: input.tenantName,
@@ -1211,9 +1214,27 @@ export class RentalService {
         bedNumber: availableBeds[0].bedNumber,
         remainingAvailableBeds: syncedListing.availableBeds,
       };
-    });
+      });
+    } catch (error) {
+      if (
+        clientRequestId &&
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        return prisma.$transaction(async (tx) => {
+          const existingInquiry = await this.findExistingClientInquiryBedRequest(tx, clientRequestId, {
+            listingId,
+            tenantName: input.tenantName,
+            tenantPhone,
+          });
 
-    return inquiry;
+          if (existingInquiry) return existingInquiry;
+          throw error;
+        });
+      }
+
+      throw error;
+    }
   }
 
   static async startContactUnlockPayment(
@@ -1260,9 +1281,11 @@ export class RentalService {
     input: TenantPaymentRequestInput,
   ) {
     const tenantPhone = this.normalizePhone(input.tenantPhone);
+    const clientRequestId = input.clientRequestId;
     const now = new Date();
 
-    return prisma.$transaction(async (tx) => {
+    try {
+      return await prisma.$transaction(async (tx) => {
       const listingForReservation = await tx.rentalListing.findUnique({
         where: { id: listingId },
       });
@@ -1275,16 +1298,16 @@ export class RentalService {
         );
       }
 
-      await this.lockPublicBedRequest(tx, listingId, tenantPhone);
+      if (clientRequestId) {
+        const existingReservation = await this.findExistingClientReservationBedRequest(tx, clientRequestId, {
+          listingId,
+          tenantName: input.tenantName,
+          tenantPhone,
+        });
 
-      const existingReservation = await this.findExistingActiveReservationBedRequest(
-        tx,
-        listingId,
-        tenantPhone,
-      );
-
-      if (existingReservation) {
-        return existingReservation;
+        if (existingReservation) {
+          return existingReservation;
+        }
       }
 
       const isExpired = listingForReservation.expiresAt !== null && listingForReservation.expiresAt <= now;
@@ -1338,6 +1361,7 @@ export class RentalService {
 
       const createdReservation = await tx.rentalReservation.create({
         data: {
+          id: clientRequestId,
           listingId: listingForReservation.id,
           compoundId: listingForReservation.compoundId,
           tenantName: input.tenantName,
@@ -1368,7 +1392,27 @@ export class RentalService {
         bedNumber: selectedBed.bedNumber,
         remainingAvailableBeds: syncedListing.availableBeds,
       };
-    });
+      });
+    } catch (error) {
+      if (
+        clientRequestId &&
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        return prisma.$transaction(async (tx) => {
+          const existingReservation = await this.findExistingClientReservationBedRequest(tx, clientRequestId, {
+            listingId,
+            tenantName: input.tenantName,
+            tenantPhone,
+          });
+
+          if (existingReservation) return existingReservation;
+          throw error;
+        });
+      }
+
+      throw error;
+    }
   }
 
   static async getReservationById(id: RentalIdParams['id']) {
@@ -2661,100 +2705,107 @@ export class RentalService {
     return slug || `sebahi-rental-${Date.now()}`;
   }
 
-  private static async lockPublicBedRequest(
-    tx: Prisma.TransactionClient,
-    listingId: string,
-    tenantPhone: string,
+  private static assertClientRequestMatches(
+    existing: {
+      listingId: string;
+      tenantName: string;
+      tenantPhone: string;
+    },
+    input: {
+      listingId: string;
+      tenantName: string;
+      tenantPhone: string;
+    },
   ) {
-    const lockKey = `rental-bed-request:${listingId}:${tenantPhone}`;
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey})::bigint)`;
+    const sameListing = existing.listingId === input.listingId;
+    const samePhone = this.normalizePhone(existing.tenantPhone) === input.tenantPhone;
+    const sameName = existing.tenantName.trim() === input.tenantName.trim();
+
+    if (!sameListing || !samePhone || !sameName) {
+      throw new AppError(
+        'Client request id is already used for another rental request',
+        409,
+        ErrorCodes.CONFLICT,
+      );
+    }
   }
 
-  private static async findExistingActiveInquiryBedRequest(
+  private static async findExistingClientInquiryBedRequest(
     tx: Prisma.TransactionClient,
-    listingId: string,
-    tenantPhone: string,
+    clientRequestId: string,
+    input: {
+      listingId: string;
+      tenantName: string;
+      tenantPhone: string;
+    },
   ) {
-    const existingInquiry = await tx.rentalInquiry.findFirst({
-      where: {
-        listingId,
-        tenantPhone,
-        status: {
-          in: [
-            RentalInquiryStatus.NEW,
-            RentalInquiryStatus.VIEWING_REQUESTED,
-            RentalInquiryStatus.CONTACT_UNLOCKED,
-          ],
-        },
-      },
-      orderBy: { createdAt: 'desc' },
+    const existingInquiry = await tx.rentalInquiry.findUnique({
+      where: { id: clientRequestId },
       select: {
         id: true,
+        listingId: true,
+        tenantName: true,
+        tenantPhone: true,
         status: true,
       },
     });
 
     if (!existingInquiry) return null;
+    this.assertClientRequestMatches(existingInquiry, input);
 
     const reservedBed = await tx.rentalBed.findFirst({
       where: {
-        listingId,
+        listingId: input.listingId,
         inquiryId: existingInquiry.id,
-        status: RentalBedStatus.RESERVED,
       },
       select: {
         bedNumber: true,
       },
     });
 
-    if (!reservedBed) return null;
-
     const remainingAvailableBeds = await tx.rentalBed.count({
       where: {
-        listingId,
+        listingId: input.listingId,
         status: RentalBedStatus.AVAILABLE,
       },
     });
 
     return {
       ...existingInquiry,
-      bedNumber: reservedBed.bedNumber,
+      bedNumber: reservedBed?.bedNumber ?? null,
       remainingAvailableBeds,
     };
   }
 
-  private static async findExistingActiveReservationBedRequest(
+  private static async findExistingClientReservationBedRequest(
     tx: Prisma.TransactionClient,
-    listingId: string,
-    tenantPhone: string,
+    clientRequestId: string,
+    input: {
+      listingId: string;
+      tenantName: string;
+      tenantPhone: string;
+    },
   ) {
-    const existingReservation = await tx.rentalReservation.findFirst({
-      where: {
-        listingId,
-        tenantPhone,
-        status: { in: activeReservationStatuses },
-      },
-      orderBy: { createdAt: 'desc' },
+    const existingReservation = await tx.rentalReservation.findUnique({
+      where: { id: clientRequestId },
     });
 
     if (!existingReservation) return null;
+    this.assertClientRequestMatches(existingReservation, input);
 
     const reservedBed = await tx.rentalBed.findFirst({
       where: {
-        listingId,
+        listingId: input.listingId,
         reservationId: existingReservation.id,
-        status: RentalBedStatus.RESERVED,
       },
       select: {
         bedNumber: true,
       },
     });
 
-    if (!reservedBed) return null;
-
     const remainingAvailableBeds = await tx.rentalBed.count({
       where: {
-        listingId,
+        listingId: input.listingId,
         status: RentalBedStatus.AVAILABLE,
       },
     });
@@ -2763,7 +2814,7 @@ export class RentalService {
       reservation: existingReservation,
       payment: null,
       paymentUrl: null,
-      bedNumber: reservedBed.bedNumber,
+      bedNumber: reservedBed?.bedNumber ?? null,
       remainingAvailableBeds,
     };
   }

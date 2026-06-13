@@ -141,6 +141,7 @@ export const rentalSlugParamsSchema = z.object({
 
 export const tenantPaymentRequestSchema = z
   .object({
+    clientRequestId: z.string().uuid('Invalid client request id').optional(),
     tenantName: z.string().trim().min(1, 'Tenant name is required').max(150),
     tenantPhone: tenantPhoneSchema,
     tenantEmail: optionalEmail,
@@ -153,6 +154,7 @@ export const contactAccessQuerySchema = z.object({
 
 export const createRentalInquirySchema = z
   .object({
+    clientRequestId: z.string().uuid('Invalid client request id').optional(),
     tenantName: z.string().trim().min(1, 'Tenant name is required').max(150),
     tenantPhone: tenantPhoneSchema,
     tenantEmail: optionalEmail,

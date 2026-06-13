@@ -55,6 +55,7 @@ export interface RentalSlugParams {
 }
 
 export interface TenantPaymentRequestInput {
+  clientRequestId?: string;
   tenantName: string;
   tenantPhone: string;
   tenantEmail?: string;
@@ -79,6 +80,7 @@ export interface OwnerSubmissionParams {
 export type RentalInquiryType = 'VIEWING_REQUEST' | 'GENERAL';
 
 export interface CreateRentalInquiryInput {
+  clientRequestId?: string;
   tenantName: string;
   tenantPhone: string;
   tenantEmail?: string;
