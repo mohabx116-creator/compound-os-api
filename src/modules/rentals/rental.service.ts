@@ -1120,6 +1120,18 @@ export class RentalService {
         );
       }
 
+      await this.lockPublicBedRequest(tx, listingId, tenantPhone);
+
+      const existingInquiry = await this.findExistingActiveInquiryBedRequest(
+        tx,
+        listingId,
+        tenantPhone,
+      );
+
+      if (existingInquiry) {
+        return existingInquiry;
+      }
+
       const isExpired = listing.expiresAt !== null && listing.expiresAt <= new Date();
 
       if (
@@ -1261,6 +1273,18 @@ export class RentalService {
           404,
           ErrorCodes.RENTAL_LISTING_NOT_FOUND,
         );
+      }
+
+      await this.lockPublicBedRequest(tx, listingId, tenantPhone);
+
+      const existingReservation = await this.findExistingActiveReservationBedRequest(
+        tx,
+        listingId,
+        tenantPhone,
+      );
+
+      if (existingReservation) {
+        return existingReservation;
       }
 
       const isExpired = listingForReservation.expiresAt !== null && listingForReservation.expiresAt <= now;
@@ -2635,6 +2659,113 @@ export class RentalService {
       .replace(/^-+|-+$/g, '');
 
     return slug || `sebahi-rental-${Date.now()}`;
+  }
+
+  private static async lockPublicBedRequest(
+    tx: Prisma.TransactionClient,
+    listingId: string,
+    tenantPhone: string,
+  ) {
+    const lockKey = `rental-bed-request:${listingId}:${tenantPhone}`;
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey})::bigint)`;
+  }
+
+  private static async findExistingActiveInquiryBedRequest(
+    tx: Prisma.TransactionClient,
+    listingId: string,
+    tenantPhone: string,
+  ) {
+    const existingInquiry = await tx.rentalInquiry.findFirst({
+      where: {
+        listingId,
+        tenantPhone,
+        status: {
+          in: [
+            RentalInquiryStatus.NEW,
+            RentalInquiryStatus.VIEWING_REQUESTED,
+            RentalInquiryStatus.CONTACT_UNLOCKED,
+          ],
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    if (!existingInquiry) return null;
+
+    const reservedBed = await tx.rentalBed.findFirst({
+      where: {
+        listingId,
+        inquiryId: existingInquiry.id,
+        status: RentalBedStatus.RESERVED,
+      },
+      select: {
+        bedNumber: true,
+      },
+    });
+
+    if (!reservedBed) return null;
+
+    const remainingAvailableBeds = await tx.rentalBed.count({
+      where: {
+        listingId,
+        status: RentalBedStatus.AVAILABLE,
+      },
+    });
+
+    return {
+      ...existingInquiry,
+      bedNumber: reservedBed.bedNumber,
+      remainingAvailableBeds,
+    };
+  }
+
+  private static async findExistingActiveReservationBedRequest(
+    tx: Prisma.TransactionClient,
+    listingId: string,
+    tenantPhone: string,
+  ) {
+    const existingReservation = await tx.rentalReservation.findFirst({
+      where: {
+        listingId,
+        tenantPhone,
+        status: { in: activeReservationStatuses },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!existingReservation) return null;
+
+    const reservedBed = await tx.rentalBed.findFirst({
+      where: {
+        listingId,
+        reservationId: existingReservation.id,
+        status: RentalBedStatus.RESERVED,
+      },
+      select: {
+        bedNumber: true,
+      },
+    });
+
+    if (!reservedBed) return null;
+
+    const remainingAvailableBeds = await tx.rentalBed.count({
+      where: {
+        listingId,
+        status: RentalBedStatus.AVAILABLE,
+      },
+    });
+
+    return {
+      reservation: existingReservation,
+      payment: null,
+      paymentUrl: null,
+      bedNumber: reservedBed.bedNumber,
+      remainingAvailableBeds,
+    };
   }
 
   private static normalizePhone(phone: string) {
