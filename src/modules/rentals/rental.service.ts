@@ -1917,11 +1917,6 @@ export class RentalService {
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      // Row-level lock on the rental listing to prevent concurrent modifications
-      await tx.$executeRaw`
-        SELECT id FROM rental_listings WHERE id = ${inquiry.listingId} FOR UPDATE
-      `;
-
       const listing = await tx.rentalListing.findUnique({
         where: { id: inquiry.listingId },
       });
@@ -3693,9 +3688,11 @@ export class RentalService {
         });
       }
       if (bedsToCreate.length > 0) {
-        await tx.rentalBed.createMany({
-          data: bedsToCreate,
-        });
+        for (const bed of bedsToCreate) {
+          await tx.rentalBed.create({
+            data: bed,
+          });
+        }
       }
     } else if (targetTotalBeds < currentActiveCount) {
       let excessCount = currentActiveCount - targetTotalBeds;
