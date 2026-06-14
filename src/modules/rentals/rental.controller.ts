@@ -117,6 +117,17 @@ export class RentalController {
     });
   });
 
+  static deleteAdminOwnerSubmission = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params as unknown as OwnerSubmissionParams;
+    const result = await RentalService.deleteAdminOwnerSubmission(id);
+
+    successResponse({
+      res,
+      message: 'تم حذف طلب الإعلان بنجاح',
+      data: result,
+    });
+  });
+
   static convertAdminOwnerSubmissionToListing = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params as unknown as OwnerSubmissionParams;
     const result = await RentalService.convertOwnerSubmissionToListing(id);
@@ -161,6 +172,17 @@ export class RentalController {
     successResponse({
       res,
       message: 'Rental owner retrieved successfully',
+      data: owner,
+    });
+  });
+
+  static deleteRentalOwner = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params as unknown as RentalOwnerParams;
+    const owner = await RentalService.deleteRentalOwner(id);
+
+    successResponse({
+      res,
+      message: 'تم حذف المالك بنجاح',
       data: owner,
     });
   });
@@ -236,6 +258,17 @@ export class RentalController {
     });
   });
 
+  static deleteAdminTenant = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params as unknown as RentalTenantParams;
+    const result = await RentalService.deleteAdminTenant(id);
+
+    successResponse({
+      res,
+      message: 'تم حذف المستأجر بنجاح',
+      data: result,
+    });
+  });
+
   static listPublicListings = asyncHandler(async (req: Request, res: Response) => {
     const result = await RentalService.listPublicListings(req.query as unknown as RentalListQuery);
 
@@ -270,6 +303,17 @@ export class RentalController {
       statusCode: 201,
       message: 'Rental inquiry submitted successfully',
       data: inquiry,
+    });
+  });
+
+  static deleteAdminInquiry = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params as unknown as RentalInquiryParams;
+    const result = await RentalService.deleteAdminInquiry(id);
+
+    successResponse({
+      res,
+      message: 'تم حذف طلب الإيجار بنجاح',
+      data: result,
     });
   });
 

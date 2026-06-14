@@ -49,6 +49,27 @@ export interface RentalTenantParams {
   id: string;
 }
 
+export interface DeleteRentalInquiryResult {
+  id: string;
+  releasedBed?: {
+    bedId: string;
+    bedNumber: number;
+  } | null;
+}
+
+export interface DeleteRentalOwnerSubmissionResult {
+  id: string;
+}
+
+export interface DeleteRentalTenantResult {
+  id: string;
+  warning?: string | null;
+}
+
+export interface DeleteRentalOwnerResult {
+  id: string;
+}
+
 export interface RentalIdParams {
   id: string;
 }

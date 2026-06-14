@@ -34,6 +34,10 @@ import type {
   AdminUpdateListingInput,
   CloudinaryUploadSignatureInput,
   ContactAccessQuery,
+  DeleteRentalInquiryResult,
+  DeleteRentalOwnerResult,
+  DeleteRentalOwnerSubmissionResult,
+  DeleteRentalTenantResult,
   CreateRentalOwnerInput,
   CreateRentalInquiryInput,
   CreateOwnerSubmissionInput,
@@ -2456,6 +2460,206 @@ export class RentalService {
 
     const [enrichedInquiry] = await this.addAdminInquiryContext([result.updated]);
     return enrichedInquiry;
+  }
+
+  static async deleteAdminInquiry(id: RentalInquiryParams['id']): Promise<DeleteRentalInquiryResult> {
+    return prisma.$transaction(async (tx) => {
+      const inquiry = await tx.rentalInquiry.findUnique({
+        where: { id },
+        include: {
+          rentalTenant: {
+            select: { id: true },
+          },
+        },
+      });
+
+      if (!inquiry) {
+        throw new AppError(
+          'Rental inquiry not found',
+          404,
+          ErrorCodes.RENTAL_INQUIRY_NOT_FOUND,
+        );
+      }
+
+      if (inquiry.status === RentalInquiryStatus.CLOSED && inquiry.rentalTenant) {
+        throw new AppError(
+          'لا يمكن حذف طلب تم تأجيره وله مستأجر مرتبط. احذف المستأجر أولاً أو استخدم إلغاء/أرشفة.',
+          409,
+          ErrorCodes.CONFLICT,
+        );
+      }
+
+      const linkedBed = await tx.rentalBed.findFirst({
+        where: { inquiryId: inquiry.id },
+        select: adminBedSelect,
+      });
+
+      let releasedBed: DeleteRentalInquiryResult['releasedBed'] = null;
+
+      if (linkedBed?.status === RentalBedStatus.RESERVED) {
+        await tx.rentalBed.update({
+          where: { id: linkedBed.id },
+          data: {
+            status: RentalBedStatus.AVAILABLE,
+            inquiryId: null,
+            reservationId: null,
+          },
+        });
+
+        releasedBed = {
+          bedId: linkedBed.id,
+          bedNumber: linkedBed.bedNumber,
+        };
+      } else if (linkedBed) {
+        await tx.rentalBed.update({
+          where: { id: linkedBed.id },
+          data: {
+            inquiryId: null,
+          },
+        });
+      }
+
+      await tx.rentalInquiry.delete({
+        where: { id: inquiry.id },
+      });
+
+      if (releasedBed) {
+        await this.syncListingCountersFromBeds(inquiry.listingId, tx);
+      }
+
+      return {
+        id: inquiry.id,
+        releasedBed,
+      };
+    });
+  }
+
+  static async deleteAdminOwnerSubmission(id: OwnerSubmissionParams['id']): Promise<DeleteRentalOwnerSubmissionResult> {
+    const submission = await prisma.rentalOwnerSubmission.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        status: true,
+        createdListingId: true,
+      },
+    });
+
+    if (!submission) {
+      throw new AppError(
+        'Owner submission not found',
+        404,
+        ErrorCodes.NOT_FOUND,
+      );
+    }
+
+    if (submission.createdListingId || submission.status === RentalOwnerSubmissionStatus.CONVERTED_TO_LISTING) {
+      throw new AppError(
+        'لا يمكن حذف طلب تم تحويله لإعلان. احذف الإعلان أو افصل العلاقة أولاً.',
+        409,
+        ErrorCodes.CONFLICT,
+      );
+    }
+
+    await prisma.rentalOwnerSubmission.delete({
+      where: { id: submission.id },
+    });
+
+    return { id: submission.id };
+  }
+
+  static async deleteAdminTenant(id: RentalTenantParams['id']): Promise<DeleteRentalTenantResult> {
+    const tenant = await prisma.rentalTenant.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        bedId: true,
+        bedNumber: true,
+        status: true,
+      },
+    });
+
+    if (!tenant) {
+      throw new AppError(
+        'Rental tenant not found',
+        404,
+        ErrorCodes.NOT_FOUND,
+      );
+    }
+
+    await prisma.rentalTenant.delete({
+      where: { id: tenant.id },
+    });
+
+    return {
+      id: tenant.id,
+      warning: tenant.bedId
+        ? 'تم حذف بيانات المستأجر فقط ولم يتم تعديل حالة السرير أو الإعلان.'
+        : null,
+    };
+  }
+
+  static async deleteRentalOwner(id: RentalOwnerParams['id']): Promise<DeleteRentalOwnerResult> {
+    const owner = await prisma.rentalOwner.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        compoundId: true,
+        phone: true,
+        whatsappPhone: true,
+        nationalId: true,
+      },
+    });
+
+    if (!owner) {
+      throw new AppError(
+        'Rental owner not found',
+        404,
+        ErrorCodes.RENTAL_OWNER_NOT_FOUND,
+      );
+    }
+
+    const activeListingCount = await prisma.rentalListing.count({
+      where: { ownerId: owner.id },
+    });
+
+    if (activeListingCount > 0) {
+      throw new AppError(
+        'لا يمكن حذف المالك لأنه مرتبط بإعلانات قائمة.',
+        409,
+        ErrorCodes.CONFLICT,
+      );
+    }
+
+    const relatedSubmission = await prisma.rentalOwnerSubmission.findFirst({
+      where: {
+        compoundId: owner.compoundId,
+        OR: [
+          { ownerPhone: owner.phone },
+          ...(owner.whatsappPhone ? [{ ownerWhatsapp: owner.whatsappPhone }] : []),
+          ...(owner.nationalId ? [{ ownerNationalId: owner.nationalId }] : []),
+        ],
+      },
+      select: {
+        id: true,
+        status: true,
+        createdListingId: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (relatedSubmission) {
+      throw new AppError(
+        'لا يمكن حذف المالك لأنه مرتبط بطلبات إعلان قائمة.',
+        409,
+        ErrorCodes.CONFLICT,
+      );
+    }
+
+    await prisma.rentalOwner.delete({
+      where: { id: owner.id },
+    });
+
+    return { id: owner.id };
   }
 
   static async createAdminListing(input: AdminCreateListingInput) {

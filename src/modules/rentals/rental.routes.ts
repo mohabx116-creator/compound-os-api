@@ -155,6 +155,13 @@ router.patch(
   RentalController.updateRentalOwner,
 );
 
+router.delete(
+  '/admin/owners/:id',
+  ...requireRentalAdmin,
+  validate({ params: rentalOwnerParamsSchema }),
+  RentalController.deleteRentalOwner,
+);
+
 router.patch(
   '/admin/owners/:id/activate',
   ...requireRentalAdmin,
@@ -183,6 +190,13 @@ router.get(
   RentalController.getAdminTenantById,
 );
 
+router.delete(
+  '/admin/tenants/:id',
+  ...requireRentalAdmin,
+  validate({ params: rentalTenantParamsSchema }),
+  RentalController.deleteAdminTenant,
+);
+
 router.get(
   '/admin/inquiries',
   ...requireRentalAdmin,
@@ -195,6 +209,13 @@ router.get(
   ...requireRentalAdmin,
   validate({ params: rentalInquiryParamsSchema }),
   RentalController.getAdminInquiryById,
+);
+
+router.delete(
+  '/admin/inquiries/:id',
+  ...requireRentalAdmin,
+  validate({ params: rentalInquiryParamsSchema }),
+  RentalController.deleteAdminInquiry,
 );
 
 router.get(
@@ -216,6 +237,13 @@ router.patch(
   ...requireRentalAdmin,
   validate({ params: ownerSubmissionParamsSchema, body: updateOwnerSubmissionStatusSchema }),
   RentalController.updateAdminOwnerSubmissionStatus,
+);
+
+router.delete(
+  '/admin/owner-submissions/:id',
+  ...requireRentalAdmin,
+  validate({ params: ownerSubmissionParamsSchema }),
+  RentalController.deleteAdminOwnerSubmission,
 );
 
 router.post(
