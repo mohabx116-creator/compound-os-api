@@ -1,4 +1,6 @@
 import {
+  AdminNotificationEntityType,
+  AdminNotificationEventType,
   Prisma,
   RentalInquiryStatus,
   RentalFurnishingStatus,
@@ -25,6 +27,7 @@ import {
   RENTAL_POLICY,
 } from './rental-policy.js';
 import { withOptimizedRentalImages } from './rental-image-urls.js';
+import { AdminNotificationService } from '../admin-notifications/admin-notification.service.js';
 import type {
   AdminCreateListingInput,
   AdminRentalListQuery,
@@ -54,6 +57,7 @@ import type {
 
 const DEFAULT_RENTAL_COMPOUND_CODE = 'black-horse';
 const DEFAULT_OWNER_SUBMISSION_COMPOUND_CODE = DEFAULT_RENTAL_COMPOUND_CODE;
+const ADMIN_OWNER_SUBMISSION_DETAIL_URL_PREFIX = '/rentals/owner-submissions/';
 
 const publicListingBaseSelect = {
   id: true,
@@ -703,7 +707,7 @@ export class RentalService {
       }
     }
 
-    return prisma.rentalOwnerSubmission.create({
+    const submission = await prisma.rentalOwnerSubmission.create({
       data: {
         compoundId: compound.id,
         ownerName: input.ownerName.trim(),
@@ -743,6 +747,26 @@ export class RentalService {
       },
       select: publicOwnerSubmissionStatusSelect,
     });
+
+    void this.emitAdminNotificationSafely({
+      compoundId: compound.id,
+      eventType: AdminNotificationEventType.RENTAL_OWNER_SUBMISSION_CREATED,
+      title: 'طلب إعلان وحدة جديد',
+      body: `تم استلام طلب إعلان وحدة جديد من ${input.ownerName.trim()}.`,
+      entityType: AdminNotificationEntityType.RENTAL_OWNER_SUBMISSION,
+      entityId: submission.id,
+      targetUrl: `${ADMIN_OWNER_SUBMISSION_DETAIL_URL_PREFIX}${submission.id}`,
+      metadata: {
+        ownerName: input.ownerName.trim(),
+        ownerPhone: this.normalizePhone(input.ownerPhone),
+        submissionId: submission.id,
+        buildingNumber: cleanText(input.buildingNumber) ?? null,
+        apartmentNumber: cleanText(input.apartmentNumber) ?? null,
+      },
+      dedupeKey: `rental-owner-submission-created:${submission.id}`,
+    });
+
+    return submission;
   }
 
   static async getOwnerSubmissionStatus(id: OwnerSubmissionParams['id']) {
@@ -1291,9 +1315,10 @@ export class RentalService {
       input.inquiryType === 'VIEWING_REQUEST'
         ? RentalInquiryStatus.VIEWING_REQUESTED
         : RentalInquiryStatus.NEW;
+    let adminNotificationInput: Parameters<typeof AdminNotificationService.createAdminNotification>[0] | null = null;
 
     try {
-      return await prisma.$transaction(async (tx) => {
+      const result = await prisma.$transaction(async (tx) => {
       const listing = await tx.rentalListing.findUnique({
         where: { id: listingId },
         select: {
@@ -1304,6 +1329,8 @@ export class RentalService {
           slug: true,
           monthlyRent: true,
           depositAmount: true,
+          buildingNumber: true,
+          apartmentNumber: true,
           status: true,
           isPublished: true,
           expiresAt: true,
@@ -1405,12 +1432,39 @@ export class RentalService {
       });
       const syncedListing = await this.syncListingCountersFromBeds(listingId, tx);
 
+      adminNotificationInput = {
+        compoundId: listing.compoundId,
+        eventType: AdminNotificationEventType.RENTAL_INQUIRY_CREATED,
+        title: 'طلب إيجار جديد',
+        body: `تم استلام طلب إيجار جديد من ${input.tenantName.trim()} على إعلان ${listing.title}.`,
+        entityType: AdminNotificationEntityType.RENTAL_INQUIRY,
+        entityId: inquiry.id,
+        targetUrl: `/rentals/inquiries/${inquiry.id}`,
+        metadata: {
+          tenantName: input.tenantName.trim(),
+          tenantPhone,
+          listingId: listing.id,
+          listingTitle: listing.title,
+          bedId: selectedBedId,
+          bedNumber: availableBeds[0].bedNumber,
+          buildingNumber: listing.buildingNumber ?? null,
+          apartmentNumber: listing.apartmentNumber ?? null,
+        },
+        dedupeKey: `rental-inquiry-created:${inquiry.id}`,
+      };
+
       return {
         ...inquiry,
         bedNumber: availableBeds[0].bedNumber,
         remainingAvailableBeds: syncedListing.availableBeds,
       };
       });
+
+      if (adminNotificationInput) {
+        await this.emitAdminNotificationSafely(adminNotificationInput);
+      }
+
+      return result;
     } catch (error) {
       if (
         clientRequestId &&
@@ -2890,6 +2944,22 @@ export class RentalService {
 
   private static warnTenantCreationSkipped(reason: string, context: Record<string, unknown>) {
     console.warn(`[rentals] Skipped rental tenant creation: ${reason}`, context);
+  }
+
+  private static async emitAdminNotificationSafely(
+    input: Parameters<typeof AdminNotificationService.createAdminNotification>[0],
+  ) {
+    try {
+      await AdminNotificationService.createAdminNotification(input);
+    } catch (error) {
+      console.warn('[rentals] Failed to emit admin notification', {
+        eventType: input.eventType,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        dedupeKey: input.dedupeKey,
+        error,
+      });
+    }
   }
 
   private static isUniqueConstraintError(error: unknown) {
