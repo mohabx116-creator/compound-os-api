@@ -310,6 +310,8 @@ model RentalListing {
   status                 RentalListingStatus    @default(DRAFT)
   addressText            String?                @map("address_text")
   locationText           String?                @map("location_text")
+  buildingNumber         String?                @map("building_number")
+  apartmentNumber        String?                @map("apartment_number")
   totalBeds              Int                    @default(4) @map("total_beds")
   pendingBeds            Int                    @default(0) @map("pending_beds")
   rentedBeds             Int                    @default(0) @map("rented_beds")
@@ -362,6 +364,8 @@ model RentalOwnerSubmission {
   description            String
   addressText            String?                     @map("address_text")
   locationText           String?                     @map("location_text")
+  buildingNumber         String?                     @map("building_number")
+  apartmentNumber        String?                     @map("apartment_number")
   floor                  Int?
   areaSqm                Decimal?                    @default(63) @map("area_sqm") @db.Decimal(10, 2)
   bedrooms               Int?                        @default(2)

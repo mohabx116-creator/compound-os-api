@@ -149,6 +149,8 @@ export interface CreateOwnerSubmissionInput {
   extraAmenitiesText?: string;
   monthlyRent: number;
   depositAmount?: number;
+  buildingNumber: string;
+  apartmentNumber: string;
   images: AdminListingImageInput[];
   policyAccepted: true;
 }
@@ -193,6 +195,8 @@ export interface AdminCreateListingInput {
   platformCommissionRate?: number;
   addressText?: string;
   locationText?: string;
+  buildingNumber: string;
+  apartmentNumber: string;
   images?: AdminListingImageInput[];
   totalBeds?: number;
 }

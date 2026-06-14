@@ -261,6 +261,8 @@ export const createOwnerSubmissionSchema = z
     monthlyRent: z.number().positive().max(100000000),
     depositAmount: z.number().nonnegative().max(100000000).optional(),
     images: z.array(publicOwnerSubmissionImageSchema).min(1, 'At least one image is required').max(12),
+    buildingNumber: z.string().trim().min(1, 'Building number is required').max(100),
+    apartmentNumber: z.string().trim().min(1, 'Apartment number is required').max(100),
     policyAccepted: policyAcceptedSchema,
   })
   .strict();
@@ -321,6 +323,8 @@ export const adminCreateListingSchema = z
     platformCommissionRate: z.number().nonnegative().max(100).optional(),
     addressText: optionalText(500),
     locationText: optionalText(500),
+    buildingNumber: z.string().trim().min(1, 'Building number is required').max(100),
+    apartmentNumber: z.string().trim().min(1, 'Apartment number is required').max(100),
     images: z.array(listingImageSchema).max(20).optional(),
     totalBeds: z.number().int().min(1).max(20).optional(),
   })
