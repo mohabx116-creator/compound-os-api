@@ -36,6 +36,7 @@ const unitConditionSchema = z.preprocess(
   z.enum(['سوبر لوكس', 'مفروشة', 'فاضية']).optional(),
 );
 const rentalOwnerStatusSchema = z.enum(['PENDING_REVIEW', 'ACTIVE', 'SUSPENDED', 'REJECTED']);
+const rentalTenantStatusSchema = z.enum(['ACTIVE', 'INACTIVE']);
 const ownerSubmissionStatusSchema = z.enum([
   'NEW',
   'UNDER_REVIEW',
@@ -117,6 +118,20 @@ export const rentalOwnerQuerySchema = z.object({
   search: optionalSearch,
   compoundId: z.string().uuid('Invalid compound id').optional(),
   status: rentalOwnerStatusSchema.optional(),
+});
+
+export const rentalTenantQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(10),
+  search: optionalSearch,
+  compoundId: z.string().uuid('Invalid compound id').optional(),
+  listingId: z.string().uuid('Invalid listing id').optional(),
+  ownerId: z.string().uuid('Invalid owner id').optional(),
+  status: rentalTenantStatusSchema.optional(),
+});
+
+export const rentalTenantParamsSchema = z.object({
+  id: z.string().trim().min(1, 'Invalid tenant id').max(100, 'Invalid tenant id'),
 });
 
 export const rentalIdParamsSchema = z.object({

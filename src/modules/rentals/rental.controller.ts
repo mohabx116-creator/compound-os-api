@@ -22,6 +22,8 @@ import type {
   OwnerSubmissionQuery,
   RentalOwnerParams,
   RentalOwnerQuery,
+  RentalTenantParams,
+  RentalTenantQuery,
   RentalSlugParams,
   TenantPaymentRequestInput,
   UpdateOwnerSubmissionStatusInput,
@@ -207,6 +209,30 @@ export class RentalController {
       res,
       message: 'Rental owner deactivated successfully',
       data: owner,
+    });
+  });
+
+  static listAdminTenants = asyncHandler(async (req: Request, res: Response) => {
+    const result = await RentalService.listAdminTenants(
+      req.query as unknown as RentalTenantQuery,
+    );
+
+    successResponse({
+      res,
+      message: 'Rental tenants retrieved successfully',
+      data: result.tenants,
+      meta: result.meta,
+    });
+  });
+
+  static getAdminTenantById = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params as unknown as RentalTenantParams;
+    const tenant = await RentalService.getAdminTenantById(id);
+
+    successResponse({
+      res,
+      message: 'Rental tenant retrieved successfully',
+      data: tenant,
     });
   });
 

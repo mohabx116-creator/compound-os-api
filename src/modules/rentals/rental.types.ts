@@ -6,6 +6,7 @@ import type {
   RentalListingType,
   RentalOwnerStatus,
   RentalOwnerSubmissionStatus,
+  RentalTenantStatus,
 } from '@prisma/client';
 
 export interface RentalListQuery {
@@ -32,6 +33,20 @@ export interface RentalOwnerQuery {
   search?: string;
   compoundId?: string;
   status?: RentalOwnerStatus;
+}
+
+export interface RentalTenantQuery {
+  page: number;
+  limit: number;
+  search?: string;
+  compoundId?: string;
+  listingId?: string;
+  ownerId?: string;
+  status?: RentalTenantStatus;
+}
+
+export interface RentalTenantParams {
+  id: string;
 }
 
 export interface RentalIdParams {

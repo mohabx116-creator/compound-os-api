@@ -41,6 +41,8 @@ import type {
   OwnerSubmissionQuery,
   RentalOwnerParams,
   RentalOwnerQuery,
+  RentalTenantParams,
+  RentalTenantQuery,
   RentalSlugParams,
   TenantPaymentRequestInput,
   UpdateOwnerSubmissionStatusInput,
@@ -225,6 +227,99 @@ const adminOwnerDetailSelect = {
     take: 20,
   },
 } satisfies Prisma.RentalOwnerSelect;
+
+const adminTenantSelect = {
+  id: true,
+  compoundId: true,
+  fullName: true,
+  phone: true,
+  email: true,
+  nationalId: true,
+  status: true,
+  inquiryId: true,
+  reservationId: true,
+  listingId: true,
+  unitId: true,
+  bedId: true,
+  ownerId: true,
+  buildingNumber: true,
+  apartmentNumber: true,
+  bedNumber: true,
+  startedAt: true,
+  endedAt: true,
+  deactivatedAt: true,
+  createdAt: true,
+  updatedAt: true,
+  listing: {
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      status: true,
+      monthlyRent: true,
+      buildingNumber: true,
+      apartmentNumber: true,
+    },
+  },
+  owner: {
+    select: {
+      id: true,
+      fullName: true,
+      phone: true,
+      whatsappPhone: true,
+      status: true,
+    },
+  },
+} satisfies Prisma.RentalTenantSelect;
+
+const adminTenantDetailSelect = {
+  ...adminTenantSelect,
+  compound: {
+    select: {
+      id: true,
+      name: true,
+      code: true,
+    },
+  },
+  unit: {
+    select: {
+      id: true,
+      unitNumber: true,
+      unitType: true,
+      floor: true,
+      areaSqm: true,
+      status: true,
+    },
+  },
+  inquiry: {
+    select: {
+      id: true,
+      status: true,
+      tenantName: true,
+      tenantPhone: true,
+      createdAt: true,
+    },
+  },
+  reservation: {
+    select: {
+      id: true,
+      status: true,
+      tenantName: true,
+      tenantPhone: true,
+      confirmedAt: true,
+      createdAt: true,
+    },
+  },
+  bed: {
+    select: {
+      id: true,
+      bedNumber: true,
+      status: true,
+      inquiryId: true,
+      reservationId: true,
+    },
+  },
+} satisfies Prisma.RentalTenantSelect;
 
 const adminInquirySelect = {
   id: true,
@@ -975,6 +1070,42 @@ export class RentalService {
       data: { status: RentalOwnerStatus.SUSPENDED },
       select: adminOwnerDetailSelect,
     });
+  }
+
+  static async listAdminTenants(query: RentalTenantQuery) {
+    const where = this.buildAdminTenantWhere(query);
+
+    const [totalCount, tenants] = await prisma.$transaction([
+      prisma.rentalTenant.count({ where }),
+      prisma.rentalTenant.findMany({
+        where,
+        ...getPrismaPagination(query),
+        select: adminTenantSelect,
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    return {
+      tenants,
+      meta: getPaginationMeta(query, totalCount),
+    };
+  }
+
+  static async getAdminTenantById(id: RentalTenantParams['id']) {
+    const tenant = await prisma.rentalTenant.findUnique({
+      where: { id },
+      select: adminTenantDetailSelect,
+    });
+
+    if (!tenant) {
+      throw new AppError(
+        'Rental tenant not found',
+        404,
+        ErrorCodes.NOT_FOUND,
+      );
+    }
+
+    return tenant;
   }
 
   private static addAvailableBeds<T extends { totalBeds: number; pendingBeds: number; rentedBeds: number }>(listing: T) {
@@ -2309,6 +2440,30 @@ export class RentalService {
 
     if (query.listingId) where.listingId = query.listingId;
     if (query.compoundId) where.compoundId = query.compoundId;
+    if (query.status) where.status = query.status;
+
+    return where;
+  }
+
+  private static buildAdminTenantWhere(query: RentalTenantQuery) {
+    const where: Prisma.RentalTenantWhereInput = {};
+
+    if (query.search) {
+      where.OR = [
+        { fullName: { contains: query.search, mode: 'insensitive' } },
+        { phone: { contains: query.search, mode: 'insensitive' } },
+        { email: { contains: query.search, mode: 'insensitive' } },
+        { nationalId: { contains: query.search, mode: 'insensitive' } },
+        { buildingNumber: { contains: query.search, mode: 'insensitive' } },
+        { apartmentNumber: { contains: query.search, mode: 'insensitive' } },
+        { listing: { title: { contains: query.search, mode: 'insensitive' } } },
+        { owner: { fullName: { contains: query.search, mode: 'insensitive' } } },
+      ];
+    }
+
+    if (query.compoundId) where.compoundId = query.compoundId;
+    if (query.listingId) where.listingId = query.listingId;
+    if (query.ownerId) where.ownerId = query.ownerId;
     if (query.status) where.status = query.status;
 
     return where;

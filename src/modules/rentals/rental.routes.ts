@@ -20,6 +20,8 @@ import {
   rentalInquiryQuerySchema,
   rentalOwnerParamsSchema,
   rentalOwnerQuerySchema,
+  rentalTenantParamsSchema,
+  rentalTenantQuerySchema,
   rentalIdParamsSchema,
   rentalListQuerySchema,
   rentalSlugParamsSchema,
@@ -165,6 +167,20 @@ router.patch(
   ...requireRentalAdmin,
   validate({ params: rentalOwnerParamsSchema }),
   RentalController.deactivateRentalOwner,
+);
+
+router.get(
+  '/admin/tenants',
+  ...requireRentalAdmin,
+  validate({ query: rentalTenantQuerySchema }),
+  RentalController.listAdminTenants,
+);
+
+router.get(
+  '/admin/tenants/:id',
+  ...requireRentalAdmin,
+  validate({ params: rentalTenantParamsSchema }),
+  RentalController.getAdminTenantById,
 );
 
 router.get(

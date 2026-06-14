@@ -128,6 +128,11 @@ enum RentalOwnerStatus {
   REJECTED
 }
 
+enum RentalTenantStatus {
+  ACTIVE
+  INACTIVE
+}
+
 enum RentalOwnerSubmissionStatus {
   NEW
   UNDER_REVIEW
@@ -167,6 +172,7 @@ model Compound {
   rentalPayments    RentalPayment[]
   rentalLedgerEntries RentalPlatformLedgerEntry[]
   rentalOwnerSubmissions RentalOwnerSubmission[]
+  rentalTenants RentalTenant[]
 
   @@index([isActive])
   @@map("compounds")
@@ -187,6 +193,7 @@ model Unit {
   residents  Resident[]
   complaints Complaint[]
   rentalListings RentalListing[]
+  rentalTenants RentalTenant[]
 
   @@unique([compoundId, unitNumber])
   @@index([compoundId])
@@ -271,6 +278,7 @@ model RentalOwner {
   updatedAt  DateTime          @updatedAt @map("updated_at")
 
   listings RentalListing[]
+  rentalTenants RentalTenant[]
 
   @@unique([compoundId, phone])
   @@index([compoundId])
@@ -332,6 +340,7 @@ model RentalListing {
   ledgerEntries  RentalPlatformLedgerEntry[]
   createdFromOwnerSubmission RentalOwnerSubmission?
   beds           RentalBed[]
+  tenants        RentalTenant[]
 
   @@unique([slug])
   @@index([compoundId])
@@ -447,6 +456,7 @@ model RentalInquiry {
   status           RentalInquiryStatus @default(NEW)
   createdAt        DateTime            @default(now()) @map("created_at")
   updatedAt        DateTime            @updatedAt @map("updated_at")
+  rentalTenant     RentalTenant?
 
   @@index([listingId])
   @@index([compoundId])
@@ -508,6 +518,7 @@ model RentalReservation {
 
   payments      RentalPayment[]
   ledgerEntries RentalPlatformLedgerEntry[]
+  rentalTenant  RentalTenant?
 
   @@index([listingId])
   @@index([compoundId])
@@ -584,6 +595,44 @@ model RentalPlatformLedgerEntry {
 
 // ─── Service Directory ────────────────────────────────────────────────────────
 
+model RentalTenant {
+  id              String             @id @default(cuid())
+  compoundId      String             @map("compound_id")
+  compound        Compound           @relation(fields: [compoundId], references: [id], onDelete: Cascade)
+  fullName        String             @map("full_name")
+  phone           String
+  email           String?
+  nationalId      String?            @map("national_id")
+  status          RentalTenantStatus @default(ACTIVE)
+  inquiryId       String?            @unique @map("inquiry_id")
+  inquiry         RentalInquiry?     @relation(fields: [inquiryId], references: [id], onDelete: SetNull)
+  reservationId   String?            @unique @map("reservation_id")
+  reservation     RentalReservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  listingId       String             @map("listing_id")
+  listing         RentalListing      @relation(fields: [listingId], references: [id], onDelete: Restrict)
+  unitId          String?            @map("unit_id")
+  unit            Unit?              @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  bedId           String?            @map("bed_id")
+  bed             RentalBed?         @relation(fields: [bedId], references: [id], onDelete: SetNull)
+  ownerId         String?            @map("owner_id")
+  owner           RentalOwner?       @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  buildingNumber  String?            @map("building_number")
+  apartmentNumber String?            @map("apartment_number")
+  bedNumber       Int?               @map("bed_number")
+  startedAt       DateTime?          @map("started_at")
+  endedAt         DateTime?          @map("ended_at")
+  deactivatedAt   DateTime?          @map("deactivated_at")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  @@index([compoundId])
+  @@index([listingId])
+  @@index([ownerId])
+  @@index([status])
+  @@index([phone])
+  @@map("rental_tenants")
+}
+
 enum ProviderStatus {
   PENDING
   ACTIVE
@@ -658,6 +707,7 @@ model RentalBed {
   notes         String?
   createdAt     DateTime        @default(now()) @map("created_at")
   updatedAt     DateTime        @updatedAt @map("updated_at")
+  rentalTenants RentalTenant[]
 
   @@unique([listingId, bedNumber])
   @@index([listingId])
