@@ -58,6 +58,21 @@ import type {
 const DEFAULT_RENTAL_COMPOUND_CODE = 'black-horse';
 const DEFAULT_OWNER_SUBMISSION_COMPOUND_CODE = DEFAULT_RENTAL_COMPOUND_CODE;
 const ADMIN_OWNER_SUBMISSION_DETAIL_URL_PREFIX = '/rentals/owner-submissions/';
+const OWNER_CONVERSION_DIAG_PREFIX = '[OWNER_CONVERSION_DIAG]';
+
+type OwnerConversionActionName = 'convert-to-listing' | 'approve-and-convert';
+
+function getOwnerConversionErrorContext(error: unknown) {
+  const prismaError = error instanceof Prisma.PrismaClientKnownRequestError ? error : null;
+
+  return {
+    errorName: error instanceof Error ? error.name : typeof error,
+    errorMessage: error instanceof Error ? error.message : String(error),
+    errorStack: error instanceof Error ? error.stack : undefined,
+    prismaCode: prismaError?.code,
+    prismaMeta: prismaError?.meta,
+  };
+}
 
 const publicListingBaseSelect = {
   id: true,
@@ -623,6 +638,78 @@ const RENTAL_BASIC_FEATURE_KEYS = [
 ];
 
 export class RentalService {
+  private static logOwnerConversionDiagnostic(
+    checkpoint: string,
+    context: Record<string, unknown>,
+  ) {
+    console.info(OWNER_CONVERSION_DIAG_PREFIX, {
+      checkpoint,
+      ...context,
+    });
+  }
+
+  private static logOwnerConversionError(
+    checkpoint: string,
+    context: Record<string, unknown>,
+    error: unknown,
+  ) {
+    console.error(OWNER_CONVERSION_DIAG_PREFIX, {
+      checkpoint,
+      ...context,
+      ...getOwnerConversionErrorContext(error),
+    });
+  }
+
+  private static getOwnerConversionRequiredFieldSummary(submission: any) {
+    const requiredFields = [
+      'id',
+      'compoundId',
+      'ownerName',
+      'ownerPhone',
+      'title',
+      'description',
+      'listingType',
+      'furnishingStatus',
+      'monthlyRent',
+      'areaSqm',
+      'bedrooms',
+      'totalBeds',
+    ];
+    const missingFields = requiredFields.filter((field) => {
+      const value = submission?.[field];
+      return value === null || value === undefined || value === '';
+    });
+
+    return {
+      requiredFieldsPresent: missingFields.length === 0,
+      missingFields,
+    };
+  }
+
+  private static logOwnerSubmissionLoaded(
+    actionName: OwnerConversionActionName,
+    submission: any,
+  ) {
+    const requiredFieldSummary = this.getOwnerConversionRequiredFieldSummary(submission);
+
+    this.logOwnerConversionDiagnostic('submission_loaded', {
+      actionName,
+      submissionId: submission.id,
+      status: submission.status,
+      createdListingId: submission.createdListingId,
+      ownerNameExists: Boolean(submission.ownerName),
+      ownerPhoneExists: Boolean(submission.ownerPhone),
+      compoundId: submission.compoundId,
+      buildingNumber: submission.buildingNumber,
+      apartmentNumber: submission.apartmentNumber,
+      totalBeds: submission.totalBeds,
+      monthlyRent: submission.monthlyRent?.toString?.() ?? submission.monthlyRent,
+      depositAmount: submission.depositAmount?.toString?.() ?? submission.depositAmount,
+      imagesCount: Array.isArray(submission.images) ? submission.images.length : 0,
+      ...requiredFieldSummary,
+    });
+  }
+
   static normalizeBasicFeatures(input: any) {
     if (input === undefined || input === null) {
       return RENTAL_BASIC_FEATURE_KEYS;
@@ -898,114 +985,180 @@ export class RentalService {
   }
 
   static async convertOwnerSubmissionToListing(id: OwnerSubmissionParams['id']) {
-    const submission = await prisma.rentalOwnerSubmission.findUnique({
-      where: { id },
-      include: {
-        images: {
-          orderBy: [{ isCover: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
-        },
-      },
+    const actionName: OwnerConversionActionName = 'convert-to-listing';
+    this.logOwnerConversionDiagnostic('service_start', {
+      actionName,
+      submissionId: id,
     });
 
-    if (!submission) {
-      throw new AppError(
-        'Owner submission not found',
-        404,
-        ErrorCodes.NOT_FOUND,
-      );
-    }
+    try {
+      const submission = await prisma.rentalOwnerSubmission.findUnique({
+        where: { id },
+        include: {
+          images: {
+            orderBy: [{ isCover: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
+          },
+        },
+      });
 
-    if (submission.createdListingId || submission.status === RentalOwnerSubmissionStatus.CONVERTED_TO_LISTING) {
-      throw new AppError(
-        'Owner submission was already converted to a listing',
-        409,
-        ErrorCodes.CONFLICT,
-      );
-    }
+      if (!submission) {
+        this.logOwnerConversionDiagnostic('submission_missing', {
+          actionName,
+          submissionId: id,
+        });
+        throw new AppError(
+          'Owner submission not found',
+          404,
+          ErrorCodes.NOT_FOUND,
+        );
+      }
 
-    if (submission.status === RentalOwnerSubmissionStatus.REJECTED) {
-      throw new AppError(
-        'Cannot convert a rejected submission',
-        409,
-        ErrorCodes.CONFLICT,
-      );
-    }
+      this.logOwnerSubmissionLoaded(actionName, submission);
 
-    if (submission.status !== RentalOwnerSubmissionStatus.APPROVED) {
-      throw new AppError(
-        'Owner submission must be approved before conversion',
-        409,
-        ErrorCodes.CONFLICT,
-      );
-    }
+      const existingCreatedListing = submission.createdListingId
+        ? await prisma.rentalListing.findUnique({
+            where: { id: submission.createdListingId },
+            select: { id: true },
+          })
+        : null;
+      this.logOwnerConversionDiagnostic('existing_listing_check', {
+        actionName,
+        submissionId: id,
+        foundExistingListing: Boolean(existingCreatedListing),
+        existingListingId: existingCreatedListing?.id ?? null,
+      });
 
-    if (submission.areaSqm === null || submission.bedrooms === null) {
-      throw new AppError(
-        'Submission is missing required listing dimensions or room counts',
-        409,
-        ErrorCodes.CONFLICT,
-      );
-    }
+      if (submission.createdListingId || submission.status === RentalOwnerSubmissionStatus.CONVERTED_TO_LISTING) {
+        throw new AppError(
+          'Owner submission was already converted to a listing',
+          409,
+          ErrorCodes.CONFLICT,
+        );
+      }
 
-    return this.executeSubmissionConversion(submission);
+      if (submission.status === RentalOwnerSubmissionStatus.REJECTED) {
+        throw new AppError(
+          'Cannot convert a rejected submission',
+          409,
+          ErrorCodes.CONFLICT,
+        );
+      }
+
+      if (submission.status !== RentalOwnerSubmissionStatus.APPROVED) {
+        throw new AppError(
+          'Owner submission must be approved before conversion',
+          409,
+          ErrorCodes.CONFLICT,
+        );
+      }
+
+      if (submission.areaSqm === null || submission.bedrooms === null) {
+        throw new AppError(
+          'Submission is missing required listing dimensions or room counts',
+          409,
+          ErrorCodes.CONFLICT,
+        );
+      }
+
+      return await this.executeSubmissionConversion(submission, actionName);
+    } catch (error) {
+      this.logOwnerConversionError('conversion_top_level_error', {
+        actionName,
+        submissionId: id,
+      }, error);
+      throw error;
+    }
   }
 
   static async approveAndConvertOwnerSubmissionToListing(id: OwnerSubmissionParams['id']) {
-    const submission = await prisma.rentalOwnerSubmission.findUnique({
-      where: { id },
-      include: {
-        images: {
-          orderBy: [{ isCover: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
-        },
-      },
+    const actionName: OwnerConversionActionName = 'approve-and-convert';
+    this.logOwnerConversionDiagnostic('service_start', {
+      actionName,
+      submissionId: id,
     });
 
-    if (!submission) {
-      throw new AppError(
-        'Owner submission not found',
-        404,
-        ErrorCodes.NOT_FOUND,
-      );
-    }
+    try {
+      const submission = await prisma.rentalOwnerSubmission.findUnique({
+        where: { id },
+        include: {
+          images: {
+            orderBy: [{ isCover: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
+          },
+        },
+      });
 
-    if (submission.createdListingId || submission.status === RentalOwnerSubmissionStatus.CONVERTED_TO_LISTING) {
-      throw new AppError(
-        'Owner submission was already converted to a listing',
-        409,
-        ErrorCodes.CONFLICT,
-      );
-    }
+      if (!submission) {
+        this.logOwnerConversionDiagnostic('submission_missing', {
+          actionName,
+          submissionId: id,
+        });
+        throw new AppError(
+          'Owner submission not found',
+          404,
+          ErrorCodes.NOT_FOUND,
+        );
+      }
 
-    if (submission.status === RentalOwnerSubmissionStatus.REJECTED) {
-      throw new AppError(
-        'Cannot convert a rejected submission',
-        409,
-        ErrorCodes.CONFLICT,
-      );
-    }
+      this.logOwnerSubmissionLoaded(actionName, submission);
 
-    const validStatuses: RentalOwnerSubmissionStatus[] = [
-      RentalOwnerSubmissionStatus.NEW,
-      RentalOwnerSubmissionStatus.UNDER_REVIEW,
-      RentalOwnerSubmissionStatus.APPROVED,
-    ];
-    if (!validStatuses.includes(submission.status)) {
-      throw new AppError(
-        `Submission status ${submission.status} cannot be converted`,
-        400,
-        ErrorCodes.BAD_REQUEST,
-      );
-    }
+      const existingCreatedListing = submission.createdListingId
+        ? await prisma.rentalListing.findUnique({
+            where: { id: submission.createdListingId },
+            select: { id: true },
+          })
+        : null;
+      this.logOwnerConversionDiagnostic('existing_listing_check', {
+        actionName,
+        submissionId: id,
+        foundExistingListing: Boolean(existingCreatedListing),
+        existingListingId: existingCreatedListing?.id ?? null,
+      });
 
-    if (submission.areaSqm === null || submission.bedrooms === null) {
-      throw new AppError(
-        'Submission is missing required listing dimensions or room counts',
-        409,
-        ErrorCodes.CONFLICT,
-      );
-    }
+      if (submission.createdListingId || submission.status === RentalOwnerSubmissionStatus.CONVERTED_TO_LISTING) {
+        throw new AppError(
+          'Owner submission was already converted to a listing',
+          409,
+          ErrorCodes.CONFLICT,
+        );
+      }
 
-    return this.executeSubmissionConversion(submission);
+      if (submission.status === RentalOwnerSubmissionStatus.REJECTED) {
+        throw new AppError(
+          'Cannot convert a rejected submission',
+          409,
+          ErrorCodes.CONFLICT,
+        );
+      }
+
+      const validStatuses: RentalOwnerSubmissionStatus[] = [
+        RentalOwnerSubmissionStatus.NEW,
+        RentalOwnerSubmissionStatus.UNDER_REVIEW,
+        RentalOwnerSubmissionStatus.APPROVED,
+      ];
+      if (!validStatuses.includes(submission.status)) {
+        throw new AppError(
+          `Submission status ${submission.status} cannot be converted`,
+          400,
+          ErrorCodes.BAD_REQUEST,
+        );
+      }
+
+      if (submission.areaSqm === null || submission.bedrooms === null) {
+        throw new AppError(
+          'Submission is missing required listing dimensions or room counts',
+          409,
+          ErrorCodes.CONFLICT,
+        );
+      }
+
+      return await this.executeSubmissionConversion(submission, actionName);
+    } catch (error) {
+      this.logOwnerConversionError('conversion_top_level_error', {
+        actionName,
+        submissionId: id,
+      }, error);
+      throw error;
+    }
   }
 
   static async listRentalOwners(query: RentalOwnerQuery) {
@@ -3453,10 +3606,32 @@ export class RentalService {
     }
   }
 
-  private static async executeSubmissionConversion(submission: any) {
+  private static async executeSubmissionConversion(
+    submission: any,
+    actionName: OwnerConversionActionName,
+  ) {
+    this.logOwnerConversionDiagnostic('validate_listing_beds_before', {
+      actionName,
+      submissionId: submission.id,
+      targetStatus: RentalListingStatus.PENDING_REVIEW,
+      totalBeds: submission.totalBeds ?? 4,
+      pendingBeds: 0,
+      rentedBeds: 0,
+    });
     this.validateListingBeds(RentalListingStatus.PENDING_REVIEW, false, submission.totalBeds ?? 4, 0, 0);
 
     return prisma.$transaction(async (tx) => {
+      this.logOwnerConversionDiagnostic('transaction_start', {
+        actionName,
+        submissionId: submission.id,
+      });
+
+      this.logOwnerConversionDiagnostic('owner_upsert_before', {
+        actionName,
+        submissionId: submission.id,
+        compoundId: submission.compoundId,
+        ownerPhoneExists: Boolean(submission.ownerPhone),
+      });
       const owner = await tx.rentalOwner.upsert({
         where: {
           compoundId_phone: {
@@ -3479,10 +3654,58 @@ export class RentalService {
           status: RentalOwnerStatus.ACTIVE,
         },
       });
+      this.logOwnerConversionDiagnostic('owner_upsert_after', {
+        actionName,
+        submissionId: submission.id,
+        ownerId: owner.id,
+      });
 
       const slug = await this.createUniqueSlugInTransaction(tx, submission.title);
       const preprocessedImages = this.normalizeSubmissionImages(submission.images);
+      const listingPayloadKeys = [
+        'compoundId',
+        'ownerId',
+        'title',
+        'slug',
+        'description',
+        'listingType',
+        'furnishingStatus',
+        'bedrooms',
+        'bathrooms',
+        'areaSqm',
+        'floor',
+        'isAirConditioned',
+        'basicFeatures',
+        'extraAmenitiesText',
+        'monthlyRent',
+        'depositAmount',
+        'unitCondition',
+        'basics',
+        'amenities',
+        'contactUnlockFee',
+        'reservationFee',
+        'platformCommissionRate',
+        'addressText',
+        'locationText',
+        'buildingNumber',
+        'apartmentNumber',
+        'status',
+        'isPublished',
+        'isFeatured',
+        'totalBeds',
+        'pendingBeds',
+        'rentedBeds',
+        ...(preprocessedImages.length ? ['images'] : []),
+      ];
 
+      this.logOwnerConversionDiagnostic('listing_create_before', {
+        actionName,
+        submissionId: submission.id,
+        ownerId: owner.id,
+        slug,
+        listingPayloadKeys,
+        imagesCount: preprocessedImages.length,
+      });
       const listing = await tx.rentalListing.create({
         data: {
           compoundId: submission.compoundId,
@@ -3530,9 +3753,49 @@ export class RentalService {
         },
         include: adminListingInclude,
       });
-      await RentalService.syncListingBeds(tx, listing.id, listing.totalBeds);
-      const syncedListing = await RentalService.syncListingCountersFromBeds(listing.id, tx);
+      this.logOwnerConversionDiagnostic('listing_create_after', {
+        actionName,
+        submissionId: submission.id,
+        listingId: listing.id,
+        totalBeds: listing.totalBeds,
+      });
 
+      this.logOwnerConversionDiagnostic('bed_provision_before', {
+        actionName,
+        submissionId: submission.id,
+        listingId: listing.id,
+        requestedBedCount: listing.totalBeds,
+      });
+      await RentalService.syncListingBeds(tx, listing.id, listing.totalBeds, {
+        actionName,
+        submissionId: submission.id,
+      });
+      const bedCountAfterProvision = await tx.rentalBed.count({
+        where: { listingId: listing.id },
+      });
+      this.logOwnerConversionDiagnostic('bed_provision_after', {
+        actionName,
+        submissionId: submission.id,
+        listingId: listing.id,
+        bedCount: bedCountAfterProvision,
+      });
+      const syncedListing = await RentalService.syncListingCountersFromBeds(listing.id, tx);
+      this.logOwnerConversionDiagnostic('listing_counter_sync_after', {
+        actionName,
+        submissionId: submission.id,
+        listingId: syncedListing.id,
+        status: syncedListing.status,
+        totalBeds: syncedListing.totalBeds,
+        pendingBeds: syncedListing.pendingBeds,
+        rentedBeds: syncedListing.rentedBeds,
+        availableBeds: syncedListing.availableBeds,
+      });
+
+      this.logOwnerConversionDiagnostic('submission_update_before', {
+        actionName,
+        submissionId: submission.id,
+        listingId: listing.id,
+      });
       const updatedSubmission = await tx.rentalOwnerSubmission.update({
         where: { id: submission.id },
         data: {
@@ -3540,6 +3803,12 @@ export class RentalService {
           createdListingId: listing.id,
         },
         select: adminOwnerSubmissionSelect,
+      });
+      this.logOwnerConversionDiagnostic('submission_update_after', {
+        actionName,
+        submissionId: updatedSubmission.id,
+        status: updatedSubmission.status,
+        createdListingId: updatedSubmission.createdListingId,
       });
 
       return {
@@ -3658,7 +3927,11 @@ export class RentalService {
   public static async syncListingBeds(
     tx: Prisma.TransactionClient,
     listingId: string,
-    targetTotalBeds: number
+    targetTotalBeds: number,
+    diagnostics?: {
+      actionName: OwnerConversionActionName;
+      submissionId: string;
+    },
   ) {
     if (targetTotalBeds < 0) {
       throw new AppError('Total beds cannot be negative', 400, ErrorCodes.BAD_REQUEST);
@@ -3690,9 +3963,27 @@ export class RentalService {
         });
       }
       if (bedsToCreate.length > 0) {
+        let createdCount = 0;
         for (const bed of bedsToCreate) {
+          if (diagnostics) {
+            RentalService.logOwnerConversionDiagnostic('bed_create_before', {
+              actionName: diagnostics.actionName,
+              submissionId: diagnostics.submissionId,
+              listingId,
+              bedNumber: bed.bedNumber,
+            });
+          }
           await tx.rentalBed.create({
             data: bed,
+          });
+          createdCount += 1;
+        }
+        if (diagnostics) {
+          RentalService.logOwnerConversionDiagnostic('bed_create_after', {
+            actionName: diagnostics.actionName,
+            submissionId: diagnostics.submissionId,
+            listingId,
+            createdCount,
           });
         }
       }
