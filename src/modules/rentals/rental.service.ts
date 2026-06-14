@@ -342,11 +342,33 @@ const adminInquirySelect = {
       status: true,
       isPublished: true,
       monthlyRent: true,
+      depositAmount: true,
       addressText: true,
       locationText: true,
+      buildingNumber: true,
+      apartmentNumber: true,
       totalBeds: true,
       pendingBeds: true,
       rentedBeds: true,
+      owner: {
+        select: {
+          id: true,
+          fullName: true,
+          phone: true,
+          whatsappPhone: true,
+          status: true,
+        },
+      },
+      unit: {
+        select: {
+          id: true,
+          unitNumber: true,
+          unitType: true,
+          floor: true,
+          areaSqm: true,
+          status: true,
+        },
+      },
     },
   },
   compound: {
@@ -1126,6 +1148,44 @@ export class RentalService {
     return inquiry;
   }
 
+  private static async addAdminInquiryContext<T extends { id: string; listing: any }>(inquiries: T[]) {
+    if (!inquiries.length) return inquiries;
+
+    const inquiryIds = inquiries.map((inquiry) => inquiry.id);
+    const linkedBeds = await prisma.rentalBed.findMany({
+      where: { inquiryId: { in: inquiryIds } },
+      select: {
+        id: true,
+        inquiryId: true,
+        bedNumber: true,
+        status: true,
+      },
+      orderBy: [{ bedNumber: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    const bedByInquiryId = new Map<string, (typeof linkedBeds)[number]>();
+    for (const bed of linkedBeds) {
+      if (bed.inquiryId && !bedByInquiryId.has(bed.inquiryId)) {
+        bedByInquiryId.set(bed.inquiryId, bed);
+      }
+    }
+
+    return inquiries.map((inquiry) => {
+      const linkedBed = bedByInquiryId.get(inquiry.id);
+
+      return {
+        ...this.addAvailableBedsToInquiry(inquiry),
+        linkedBed: linkedBed
+          ? {
+              bedId: linkedBed.id,
+              bedNumber: linkedBed.bedNumber,
+              bedStatus: linkedBed.status,
+            }
+          : null,
+      };
+    });
+  }
+
   static async listPublicListings(query: RentalListQuery): Promise<PublicListingsResponse> {
     const startTime = Date.now();
     const normalized: Record<string, any> = {};
@@ -1736,7 +1796,7 @@ export class RentalService {
     ]);
 
     return {
-      inquiries: inquiries.map((inquiry) => this.addAvailableBedsToInquiry(inquiry)),
+      inquiries: await this.addAdminInquiryContext(inquiries),
       meta: getPaginationMeta(query, totalCount),
     };
   }
@@ -1755,7 +1815,8 @@ export class RentalService {
       );
     }
 
-    return this.addAvailableBedsToInquiry(inquiry);
+    const [enrichedInquiry] = await this.addAdminInquiryContext([inquiry]);
+    return enrichedInquiry;
   }
 
   static async updateAdminInquiryStatus(
@@ -1919,7 +1980,8 @@ export class RentalService {
       });
     }
 
-    return this.addAvailableBedsToInquiry(result.updated);
+    const [enrichedInquiry] = await this.addAdminInquiryContext([result.updated]);
+    return enrichedInquiry;
   }
 
   static async createAdminListing(input: AdminCreateListingInput) {
