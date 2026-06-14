@@ -32,8 +32,6 @@ import type {
   UpdateRentalOwnerInput,
 } from './rental.types.js';
 
-const OWNER_CONVERSION_DIAG_PREFIX = '[OWNER_CONVERSION_DIAG]';
-
 export class RentalController {
   static createCloudinaryUploadSignature = asyncHandler(async (req: Request, res: Response) => {
     const result = RentalService.createCloudinaryUploadSignature(
@@ -121,13 +119,6 @@ export class RentalController {
 
   static convertAdminOwnerSubmissionToListing = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params as unknown as OwnerSubmissionParams;
-    console.info(OWNER_CONVERSION_DIAG_PREFIX, {
-      checkpoint: 'controller_received',
-      actionName: 'convert-to-listing',
-      endpoint: req.originalUrl,
-      submissionId: id,
-      requestBodyKeys: Object.keys(req.body ?? {}),
-    });
     const result = await RentalService.convertOwnerSubmissionToListing(id);
 
     successResponse({
@@ -140,13 +131,6 @@ export class RentalController {
 
   static approveAndConvertAdminOwnerSubmissionToListing = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params as unknown as OwnerSubmissionParams;
-    console.info(OWNER_CONVERSION_DIAG_PREFIX, {
-      checkpoint: 'controller_received',
-      actionName: 'approve-and-convert',
-      endpoint: req.originalUrl,
-      submissionId: id,
-      requestBodyKeys: Object.keys(req.body ?? {}),
-    });
     const result = await RentalService.approveAndConvertOwnerSubmissionToListing(id);
 
     successResponse({
