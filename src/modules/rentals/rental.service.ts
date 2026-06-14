@@ -7,6 +7,7 @@ import {
   RentalOwnerSubmissionStatus,
   RentalPaymentStatus,
   RentalReservationStatus,
+  RentalTenantStatus,
   UnitStatus,
   RentalBedStatus,
 } from '@prisma/client';
@@ -1808,7 +1809,7 @@ export class RentalService {
       );
     }
 
-    const updatedInquiry = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       // Row-level lock on the rental listing to prevent concurrent modifications
       await tx.$executeRaw`
         SELECT id FROM rental_listings WHERE id = ${inquiry.listingId} FOR UPDATE
@@ -1821,6 +1822,8 @@ export class RentalService {
       if (!listing) {
         throw new AppError('Listing associated with inquiry not found', 404, ErrorCodes.RENTAL_LISTING_NOT_FOUND);
       }
+
+      let rentedBed: { id: string; bedNumber: number } | null = null;
 
       if (newStatus === RentalInquiryStatus.CLOSED) {
         const selectedBed = await tx.rentalBed.findUnique({
@@ -1871,6 +1874,8 @@ export class RentalService {
             reservationId: null,
           },
         });
+
+        rentedBed = selectedBed;
       } else if (newStatus === RentalInquiryStatus.CANCELLED) {
         await tx.rentalBed.updateMany({
           where: {
@@ -1896,10 +1901,25 @@ export class RentalService {
         await this.syncListingCountersFromBeds(inquiry.listingId, tx);
       }
 
-      return updated;
+      return {
+        updated,
+        listing,
+        rentedBed,
+      };
     });
 
-    return this.addAvailableBedsToInquiry(updatedInquiry);
+    if (newStatus === RentalInquiryStatus.CLOSED) {
+      await this.ensureRentalTenantForInquiry({
+        inquiry: {
+          ...inquiry,
+          listing: result.listing,
+        },
+        bed: result.rentedBed,
+        startedAt: new Date(),
+      });
+    }
+
+    return this.addAvailableBedsToInquiry(result.updated);
   }
 
   static async createAdminListing(input: AdminCreateListingInput) {
@@ -2267,7 +2287,7 @@ export class RentalService {
   }
 
   static async confirmReservation(id: RentalIdParams['id']) {
-    return prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const reservation = await tx.rentalReservation.findUnique({
         where: { id },
         include: { listing: true },
@@ -2309,6 +2329,14 @@ export class RentalService {
         },
       });
 
+      const linkedBed = await tx.rentalBed.findFirst({
+        where: { reservationId: reservation.id },
+        select: {
+          id: true,
+          bedNumber: true,
+        },
+      });
+
       await tx.rentalPlatformLedgerEntry.createMany({
         data: [
           {
@@ -2337,8 +2365,25 @@ export class RentalService {
       return {
         reservation: confirmedReservation,
         listing: this.addAvailableBeds(listing),
+        tenantSource: {
+          ...reservation,
+          listing: reservation.listing,
+        },
+        linkedBed,
+        startedAt: now,
       };
     });
+
+    await this.ensureRentalTenantForReservation({
+      reservation: result.tenantSource,
+      bed: result.linkedBed,
+      startedAt: result.startedAt,
+    });
+
+    return {
+      reservation: result.reservation,
+      listing: result.listing,
+    };
   }
 
   static async cancelReservation(id: RentalIdParams['id']) {
@@ -2776,6 +2821,197 @@ export class RentalService {
           ErrorCodes.CONFLICT,
         );
       }
+    }
+  }
+
+  private static warnTenantCreationSkipped(reason: string, context: Record<string, unknown>) {
+    console.warn(`[rentals] Skipped rental tenant creation: ${reason}`, context);
+  }
+
+  private static isUniqueConstraintError(error: unknown) {
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    );
+  }
+
+  private static buildRentalTenantData(input: {
+    compoundId?: string | null;
+    fullName?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    nationalId?: string | null;
+    inquiryId?: string | null;
+    reservationId?: string | null;
+    listingId?: string | null;
+    unitId?: string | null;
+    bedId?: string | null;
+    ownerId?: string | null;
+    buildingNumber?: string | null;
+    apartmentNumber?: string | null;
+    bedNumber?: number | null;
+    startedAt: Date;
+  }) {
+    const fullName = cleanText(input.fullName);
+    const phone = cleanText(input.phone);
+
+    if (!fullName || !phone || !input.compoundId || !input.listingId) {
+      this.warnTenantCreationSkipped('missing required tenant identity or listing data', {
+        inquiryId: input.inquiryId,
+        reservationId: input.reservationId,
+        listingId: input.listingId,
+        hasFullName: Boolean(fullName),
+        hasPhone: Boolean(phone),
+        hasCompoundId: Boolean(input.compoundId),
+      });
+      return null;
+    }
+
+    return {
+      compoundId: input.compoundId,
+      fullName,
+      phone,
+      email: cleanText(input.email),
+      nationalId: cleanText(input.nationalId),
+      status: RentalTenantStatus.ACTIVE,
+      inquiryId: input.inquiryId || undefined,
+      reservationId: input.reservationId || undefined,
+      listingId: input.listingId,
+      unitId: input.unitId || undefined,
+      bedId: input.bedId || undefined,
+      ownerId: input.ownerId || undefined,
+      buildingNumber: cleanText(input.buildingNumber),
+      apartmentNumber: cleanText(input.apartmentNumber),
+      bedNumber: input.bedNumber ?? undefined,
+      startedAt: input.startedAt,
+    } satisfies Prisma.RentalTenantUncheckedCreateInput;
+  }
+
+  private static async ensureRentalTenantForInquiry(input: {
+    inquiry: {
+      id: string;
+      listingId: string;
+      compoundId: string;
+      tenantName: string;
+      tenantPhone: string;
+      tenantEmail?: string | null;
+      listing: {
+        id: string;
+        compoundId: string;
+        unitId?: string | null;
+        ownerId: string;
+        buildingNumber?: string | null;
+        apartmentNumber?: string | null;
+      };
+    };
+    bed?: {
+      id: string;
+      bedNumber: number;
+    } | null;
+    startedAt: Date;
+  }) {
+    const existing = await prisma.rentalTenant.findUnique({
+      where: { inquiryId: input.inquiry.id },
+      select: { id: true },
+    });
+
+    if (existing) return existing;
+
+    const data = this.buildRentalTenantData({
+      compoundId: input.inquiry.compoundId || input.inquiry.listing.compoundId,
+      fullName: input.inquiry.tenantName,
+      phone: input.inquiry.tenantPhone,
+      email: input.inquiry.tenantEmail,
+      inquiryId: input.inquiry.id,
+      listingId: input.inquiry.listingId || input.inquiry.listing.id,
+      unitId: input.inquiry.listing.unitId,
+      bedId: input.bed?.id,
+      ownerId: input.inquiry.listing.ownerId,
+      buildingNumber: input.inquiry.listing.buildingNumber,
+      apartmentNumber: input.inquiry.listing.apartmentNumber,
+      bedNumber: input.bed?.bedNumber,
+      startedAt: input.startedAt,
+    });
+
+    if (!data) return null;
+
+    try {
+      return await prisma.rentalTenant.create({
+        data,
+        select: { id: true },
+      });
+    } catch (error) {
+      if (this.isUniqueConstraintError(error)) {
+        return prisma.rentalTenant.findUnique({
+          where: { inquiryId: input.inquiry.id },
+          select: { id: true },
+        });
+      }
+      throw error;
+    }
+  }
+
+  private static async ensureRentalTenantForReservation(input: {
+    reservation: {
+      id: string;
+      listingId: string;
+      compoundId: string;
+      tenantName: string;
+      tenantPhone: string;
+      tenantEmail?: string | null;
+      listing: {
+        id: string;
+        compoundId: string;
+        unitId?: string | null;
+        ownerId: string;
+        buildingNumber?: string | null;
+        apartmentNumber?: string | null;
+      };
+    };
+    bed?: {
+      id: string;
+      bedNumber: number;
+    } | null;
+    startedAt: Date;
+  }) {
+    const existing = await prisma.rentalTenant.findUnique({
+      where: { reservationId: input.reservation.id },
+      select: { id: true },
+    });
+
+    if (existing) return existing;
+
+    const data = this.buildRentalTenantData({
+      compoundId: input.reservation.compoundId || input.reservation.listing.compoundId,
+      fullName: input.reservation.tenantName,
+      phone: input.reservation.tenantPhone,
+      email: input.reservation.tenantEmail,
+      reservationId: input.reservation.id,
+      listingId: input.reservation.listingId || input.reservation.listing.id,
+      unitId: input.reservation.listing.unitId,
+      bedId: input.bed?.id,
+      ownerId: input.reservation.listing.ownerId,
+      buildingNumber: input.reservation.listing.buildingNumber,
+      apartmentNumber: input.reservation.listing.apartmentNumber,
+      bedNumber: input.bed?.bedNumber,
+      startedAt: input.startedAt,
+    });
+
+    if (!data) return null;
+
+    try {
+      return await prisma.rentalTenant.create({
+        data,
+        select: { id: true },
+      });
+    } catch (error) {
+      if (this.isUniqueConstraintError(error)) {
+        return prisma.rentalTenant.findUnique({
+          where: { reservationId: input.reservation.id },
+          select: { id: true },
+        });
+      }
+      throw error;
     }
   }
 
