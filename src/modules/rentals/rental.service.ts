@@ -3685,6 +3685,8 @@ export class RentalService {
           listingId,
           bedNumber: maxBedNumber + index,
           status: RentalBedStatus.AVAILABLE,
+          createdAt: new Date(),
+          updatedAt: new Date(),
         });
       }
       if (bedsToCreate.length > 0) {
