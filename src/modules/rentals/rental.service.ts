@@ -1862,14 +1862,6 @@ export class RentalService {
       );
     }
 
-    if (newStatus === RentalInquiryStatus.CLOSED && !input.bedId) {
-      throw new AppError(
-        'A bed must be selected before accepting the inquiry',
-        400,
-        ErrorCodes.BAD_REQUEST,
-      );
-    }
-
     const result = await prisma.$transaction(async (tx) => {
       // Row-level lock on the rental listing to prevent concurrent modifications
       await tx.$executeRaw`
@@ -1887,48 +1879,58 @@ export class RentalService {
       let rentedBed: { id: string; bedNumber: number } | null = null;
 
       if (newStatus === RentalInquiryStatus.CLOSED) {
-        const selectedBed = await tx.rentalBed.findUnique({
-          where: { id: input.bedId },
+        const linkedBed = await tx.rentalBed.findFirst({
+          where: {
+            inquiryId: inquiry.id,
+          },
           select: adminBedSelect,
         });
 
-        if (!selectedBed) {
-          throw new AppError('Selected rental bed not found', 404, ErrorCodes.NOT_FOUND);
+        if (!linkedBed) {
+          throw new AppError(
+            'لا يمكن تأكيد الإيجار لأن الطلب غير مرتبط بسرير محجوز.',
+            400,
+            ErrorCodes.BAD_REQUEST,
+          );
         }
 
-        if (selectedBed.listingId !== inquiry.listingId) {
+        if (input.bedId && input.bedId !== linkedBed.id) {
           throw new AppError(
-            'Selected bed does not belong to this inquiry listing',
+            'يجب أن يطابق السرير المحدد السرير المرتبط بالطلب.',
+            400,
+            ErrorCodes.BAD_REQUEST,
+          );
+        }
+
+        if (linkedBed.listingId !== inquiry.listingId) {
+          throw new AppError(
+            'السرير المرتبط لا ينتمي إلى هذا الإعلان.',
+            400,
+            ErrorCodes.BAD_REQUEST,
+          );
+        }
+
+        if (linkedBed.status !== RentalBedStatus.RESERVED) {
+          throw new AppError(
+            'يجب أن يظل السرير المرتبط محجوزا قبل تأكيد الإيجار.',
             400,
             ErrorCodes.BAD_REQUEST,
           );
         }
 
         if (
-          selectedBed.status !== RentalBedStatus.AVAILABLE &&
-          selectedBed.status !== RentalBedStatus.RESERVED
+          linkedBed.inquiryId &&
+          linkedBed.inquiryId !== inquiry.id
         ) {
           throw new AppError(
-            'Selected bed must be available or temporarily reserved',
-            400,
-            ErrorCodes.BAD_REQUEST,
-          );
-        }
-
-        if (
-          selectedBed.status === RentalBedStatus.RESERVED &&
-          selectedBed.inquiryId &&
-          selectedBed.inquiryId !== inquiry.id
-        ) {
-          throw new AppError(
-            'Selected reserved bed is linked to another inquiry',
+            'السرير المرتبط مرتبط بطلب آخر.',
             400,
             ErrorCodes.BAD_REQUEST,
           );
         }
 
         await tx.rentalBed.update({
-          where: { id: selectedBed.id },
+          where: { id: linkedBed.id },
           data: {
             status: RentalBedStatus.RENTED,
             inquiryId: inquiry.id,
@@ -1936,7 +1938,7 @@ export class RentalService {
           },
         });
 
-        rentedBed = selectedBed;
+        rentedBed = linkedBed;
       } else if (newStatus === RentalInquiryStatus.CANCELLED) {
         await tx.rentalBed.updateMany({
           where: {
