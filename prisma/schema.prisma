@@ -453,6 +453,7 @@ model RentalInquiry {
   tenantName       String              @map("tenant_name")
   tenantPhone      String              @map("tenant_phone")
   tenantEmail      String?             @map("tenant_email")
+  tenantNationalId String?             @map("tenant_national_id")
   message          String?
   status           RentalInquiryStatus @default(NEW)
   createdAt        DateTime            @default(now()) @map("created_at")

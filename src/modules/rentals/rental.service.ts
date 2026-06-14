@@ -334,6 +334,7 @@ const adminInquirySelect = {
   tenantName: true,
   tenantPhone: true,
   tenantEmail: true,
+  tenantNationalId: true,
   message: true,
   status: true,
   createdAt: true,
@@ -1834,6 +1835,7 @@ export class RentalService {
           tenantName: input.tenantName,
           tenantPhone,
           tenantEmail: input.tenantEmail,
+          tenantNationalId: cleanText(input.tenantNationalId),
           message: this.buildWhatsAppInquiryMessage(input, tenantPhone, listing),
           status,
         },
@@ -3453,6 +3455,7 @@ export class RentalService {
         buildingNumber?: string | null;
         apartmentNumber?: string | null;
       };
+      tenantNationalId?: string | null;
     };
     bed?: {
       id: string;
@@ -3472,6 +3475,7 @@ export class RentalService {
       fullName: input.inquiry.tenantName,
       phone: input.inquiry.tenantPhone,
       email: input.inquiry.tenantEmail,
+      nationalId: input.inquiry.tenantNationalId,
       inquiryId: input.inquiry.id,
       listingId: input.inquiry.listingId || input.inquiry.listing.id,
       unitId: input.inquiry.listing.unitId,
@@ -3509,6 +3513,7 @@ export class RentalService {
       tenantName: string;
       tenantPhone: string;
       tenantEmail?: string | null;
+      nationalId?: string | null;
       listing: {
         id: string;
         compoundId: string;
