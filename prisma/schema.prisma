@@ -173,6 +173,7 @@ model Compound {
   rentalLedgerEntries RentalPlatformLedgerEntry[]
   rentalOwnerSubmissions RentalOwnerSubmission[]
   rentalTenants RentalTenant[]
+  adminNotifications AdminNotification[]
 
   @@index([isActive])
   @@map("compounds")
@@ -696,6 +697,28 @@ enum RentalBedStatus {
   OUT_OF_SERVICE
 }
 
+enum AdminNotificationAudience {
+  ADMIN
+}
+
+enum AdminNotificationEventType {
+  RENTAL_INQUIRY_CREATED
+  RENTAL_OWNER_SUBMISSION_CREATED
+  RENTAL_INQUIRY_APPROVED
+  RENTAL_INQUIRY_CANCELLED
+  RENTAL_OWNER_SUBMISSION_APPROVED
+  RENTAL_OWNER_SUBMISSION_REJECTED
+  SYSTEM
+}
+
+enum AdminNotificationEntityType {
+  RENTAL_INQUIRY
+  RENTAL_OWNER_SUBMISSION
+  RENTAL_LISTING
+  RENTAL_TENANT
+  SYSTEM
+}
+
 model RentalBed {
   id            String          @id @default(cuid())
   listingId     String          @map("listing_id")
@@ -715,4 +738,30 @@ model RentalBed {
   @@index([inquiryId])
   @@index([reservationId])
   @@map("rental_beds")
+}
+
+model AdminNotification {
+  id          String                      @id @default(cuid())
+  compoundId  String?                     @map("compound_id")
+  compound    Compound?                   @relation(fields: [compoundId], references: [id], onDelete: SetNull)
+  audience    AdminNotificationAudience   @default(ADMIN)
+  eventType   AdminNotificationEventType  @map("event_type")
+  title       String
+  body        String
+  entityType  AdminNotificationEntityType? @map("entity_type")
+  entityId    String?                     @map("entity_id")
+  targetUrl   String?                     @map("target_url")
+  readAt      DateTime?                   @map("read_at")
+  metadata    Json?
+  dedupeKey   String?                     @unique @map("dedupe_key")
+  createdAt   DateTime                    @default(now()) @map("created_at")
+  updatedAt   DateTime                    @updatedAt @map("updated_at")
+
+  @@index([audience])
+  @@index([eventType])
+  @@index([entityType, entityId])
+  @@index([readAt])
+  @@index([createdAt])
+  @@index([compoundId])
+  @@map("admin_notifications")
 }
