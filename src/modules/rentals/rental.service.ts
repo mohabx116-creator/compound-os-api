@@ -2599,67 +2599,159 @@ export class RentalService {
   }
 
   static async deleteRentalOwner(id: RentalOwnerParams['id']): Promise<DeleteRentalOwnerResult> {
-    const owner = await prisma.rentalOwner.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        compoundId: true,
-        phone: true,
-        whatsappPhone: true,
-        nationalId: true,
-      },
-    });
+    return prisma.$transaction(async (tx) => {
+      const owner = await tx.rentalOwner.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          compoundId: true,
+          phone: true,
+          whatsappPhone: true,
+          nationalId: true,
+        },
+      });
 
-    if (!owner) {
-      throw new AppError(
-        'Rental owner not found',
-        404,
-        ErrorCodes.RENTAL_OWNER_NOT_FOUND,
-      );
-    }
+      if (!owner) {
+        throw new AppError(
+          'Rental owner not found',
+          404,
+          ErrorCodes.RENTAL_OWNER_NOT_FOUND,
+        );
+      }
 
-    const activeListingCount = await prisma.rentalListing.count({
-      where: { ownerId: owner.id },
-    });
+      const listings = await tx.rentalListing.findMany({
+        where: { ownerId: owner.id },
+        select: { id: true },
+      });
+      const listingIds = listings.map((listing) => listing.id);
 
-    if (activeListingCount > 0) {
-      throw new AppError(
-        'لا يمكن حذف المالك لأنه مرتبط بإعلانات قائمة.',
-        409,
-        ErrorCodes.CONFLICT,
-      );
-    }
-
-    const relatedSubmission = await prisma.rentalOwnerSubmission.findFirst({
-      where: {
+      const submissionsWhere: Prisma.RentalOwnerSubmissionWhereInput = {
         compoundId: owner.compoundId,
         OR: [
           { ownerPhone: owner.phone },
           ...(owner.whatsappPhone ? [{ ownerWhatsapp: owner.whatsappPhone }] : []),
           ...(owner.nationalId ? [{ ownerNationalId: owner.nationalId }] : []),
+          ...(listingIds.length > 0 ? [{ createdListingId: { in: listingIds } }] : []),
         ],
-      },
-      select: {
-        id: true,
-        status: true,
-        createdListingId: true,
-      },
-      orderBy: { createdAt: 'desc' },
+      };
+
+      const [submissions, tenants] = await Promise.all([
+        tx.rentalOwnerSubmission.findMany({
+          where: submissionsWhere,
+          select: { id: true },
+        }),
+        tx.rentalTenant.findMany({
+          where: {
+            OR: [
+              { ownerId: owner.id },
+              ...(listingIds.length > 0 ? [{ listingId: { in: listingIds } }] : []),
+            ],
+          },
+          select: { id: true },
+        }),
+      ]);
+
+      const [inquiries, beds, reservations, contactUnlocks] = listingIds.length > 0
+        ? await Promise.all([
+            tx.rentalInquiry.findMany({
+              where: { listingId: { in: listingIds } },
+              select: { id: true },
+            }),
+            tx.rentalBed.findMany({
+              where: { listingId: { in: listingIds } },
+              select: { id: true },
+            }),
+            tx.rentalReservation.findMany({
+              where: { listingId: { in: listingIds } },
+              select: { id: true },
+            }),
+            tx.rentalContactUnlock.findMany({
+              where: { listingId: { in: listingIds } },
+              select: { id: true },
+            }),
+          ])
+        : [[], [], [], []];
+
+      const notificationEntityIds = [
+        ...listingIds,
+        ...submissions.map((submission) => submission.id),
+        ...tenants.map((tenant) => tenant.id),
+        ...inquiries.map((inquiry) => inquiry.id),
+      ];
+
+      const deletedNotifications = notificationEntityIds.length > 0
+        ? (await tx.adminNotification.deleteMany({
+            where: {
+              entityType: {
+                in: [
+                  AdminNotificationEntityType.RENTAL_LISTING,
+                  AdminNotificationEntityType.RENTAL_OWNER_SUBMISSION,
+                  AdminNotificationEntityType.RENTAL_INQUIRY,
+                  AdminNotificationEntityType.RENTAL_TENANT,
+                ],
+              },
+              entityId: { in: notificationEntityIds },
+            },
+          })).count
+        : 0;
+
+      const deletedTenants = (await tx.rentalTenant.deleteMany({
+        where: {
+          OR: [
+            { ownerId: owner.id },
+            ...(listingIds.length > 0 ? [{ listingId: { in: listingIds } }] : []),
+          ],
+        },
+      })).count;
+
+      const deletedInquiries = listingIds.length > 0
+        ? (await tx.rentalInquiry.deleteMany({
+            where: { listingId: { in: listingIds } },
+          })).count
+        : 0;
+
+      const deletedReservations = listingIds.length > 0
+        ? (await tx.rentalReservation.deleteMany({
+            where: { listingId: { in: listingIds } },
+          })).count
+        : 0;
+
+      const deletedContactUnlocks = listingIds.length > 0
+        ? (await tx.rentalContactUnlock.deleteMany({
+            where: { listingId: { in: listingIds } },
+          })).count
+        : 0;
+
+      const deletedBeds = listingIds.length > 0
+        ? (await tx.rentalBed.deleteMany({
+            where: { listingId: { in: listingIds } },
+          })).count
+        : 0;
+
+      const deletedOwnerSubmissions = (await tx.rentalOwnerSubmission.deleteMany({
+        where: submissionsWhere,
+      })).count;
+
+      const deletedListings = (await tx.rentalListing.deleteMany({
+        where: { ownerId: owner.id },
+      })).count;
+
+      await tx.rentalOwner.delete({
+        where: { id: owner.id },
+      });
+
+      return {
+        deletedOwnerId: owner.id,
+        deletedListings,
+        deletedBeds,
+        deletedInquiries,
+        deletedTenants,
+        deletedOwnerSubmissions,
+        deletedReservations,
+        deletedContactUnlocks,
+        deletedNotifications,
+      };
     });
-
-    if (relatedSubmission) {
-      throw new AppError(
-        'لا يمكن حذف المالك لأنه مرتبط بطلبات إعلان قائمة.',
-        409,
-        ErrorCodes.CONFLICT,
-      );
-    }
-
-    await prisma.rentalOwner.delete({
-      where: { id: owner.id },
-    });
-
-    return { id: owner.id };
   }
 
   static async createAdminListing(input: AdminCreateListingInput) {

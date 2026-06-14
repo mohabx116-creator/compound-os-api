@@ -67,7 +67,15 @@ export interface DeleteRentalTenantResult {
 }
 
 export interface DeleteRentalOwnerResult {
-  id: string;
+  deletedOwnerId: string;
+  deletedListings: number;
+  deletedBeds: number;
+  deletedInquiries: number;
+  deletedTenants: number;
+  deletedOwnerSubmissions: number;
+  deletedReservations: number;
+  deletedContactUnlocks: number;
+  deletedNotifications: number;
 }
 
 export interface RentalIdParams {
