@@ -14,7 +14,6 @@ const adminNotificationEventTypeSchema = z.enum([
   'RENTAL_INQUIRY_CANCELLED',
   'RENTAL_OWNER_SUBMISSION_APPROVED',
   'RENTAL_OWNER_SUBMISSION_REJECTED',
-  'SERVICE_REQUEST_CREATED',
   'SYSTEM',
 ]);
 
@@ -23,7 +22,6 @@ const adminNotificationEntityTypeSchema = z.enum([
   'RENTAL_OWNER_SUBMISSION',
   'RENTAL_LISTING',
   'RENTAL_TENANT',
-  'SERVICE_REQUEST',
   'SYSTEM',
 ]);
 

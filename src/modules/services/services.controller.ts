@@ -4,20 +4,11 @@ import { successResponse } from '../../common/utils/api-response.js';
 import { ServicesService } from './services.service.js';
 import type {
   AdminServiceItemQuery,
-  CreateServiceCategoryInput,
   CreateServiceItemInput,
-  CreateServiceRequestInput,
-  ServiceCategoryQuery,
-  ServiceCategoryIdParams,
-  ServiceCategorySlugParams,
   ServiceItemIdParams,
   PublicServiceItemQuery,
   ServiceItemSlugParams,
-  ServiceRequestIdParams,
-  ServiceRequestQuery,
-  UpdateServiceCategoryInput,
   UpdateServiceItemInput,
-  UpdateServiceRequestStatusInput,
 } from './services.types.js';
 
 export class ServicesController {
@@ -27,27 +18,6 @@ export class ServicesController {
     successResponse({
       res,
       message: 'Services retrieved successfully',
-      data: result,
-    });
-  });
-
-  static listPublicCategories = asyncHandler(async (req: Request, res: Response) => {
-    const result = await ServicesService.listPublicCategories(req.query as unknown as { compoundId?: string });
-
-    successResponse({
-      res,
-      message: 'Service categories retrieved successfully',
-      data: result.categories,
-    });
-  });
-
-  static getPublicCategoryBySlug = asyncHandler(async (req: Request, res: Response) => {
-    const { slug } = req.params as unknown as ServiceCategorySlugParams;
-    const result = await ServicesService.getPublicCategoryBySlug(slug, req.query as unknown as { compoundId?: string });
-
-    successResponse({
-      res,
-      message: 'Service category retrieved successfully',
       data: result,
     });
   });
@@ -70,73 +40,6 @@ export class ServicesController {
     successResponse({
       res,
       message: 'Service item retrieved successfully',
-      data: result,
-    });
-  });
-
-  static createServiceRequest = asyncHandler(async (req: Request, res: Response) => {
-    const { id } = req.params as unknown as ServiceItemIdParams;
-    const request = await ServicesService.createServiceRequest(id, req.body as CreateServiceRequestInput);
-
-    successResponse({
-      res,
-      statusCode: 201,
-      message: 'Service request created successfully',
-      data: request,
-    });
-  });
-
-  static listAdminCategories = asyncHandler(async (req: Request, res: Response) => {
-    const result = await ServicesService.listAdminCategories(req.query as unknown as ServiceCategoryQuery);
-
-    successResponse({
-      res,
-      message: 'Service categories retrieved successfully',
-      data: result.categories,
-      meta: result.meta,
-    });
-  });
-
-  static createAdminCategory = asyncHandler(async (req: Request, res: Response) => {
-    const category = await ServicesService.createAdminCategory(req.body as CreateServiceCategoryInput);
-
-    successResponse({
-      res,
-      statusCode: 201,
-      message: 'Service category created successfully',
-      data: category,
-    });
-  });
-
-  static getAdminCategoryById = asyncHandler(async (req: Request, res: Response) => {
-    const { id } = req.params as unknown as ServiceCategoryIdParams;
-    const category = await ServicesService.getAdminCategoryById(id);
-
-    successResponse({
-      res,
-      message: 'Service category retrieved successfully',
-      data: category,
-    });
-  });
-
-  static updateAdminCategory = asyncHandler(async (req: Request, res: Response) => {
-    const { id } = req.params as unknown as ServiceCategoryIdParams;
-    const category = await ServicesService.updateAdminCategory(id, req.body as UpdateServiceCategoryInput);
-
-    successResponse({
-      res,
-      message: 'Service category updated successfully',
-      data: category,
-    });
-  });
-
-  static deleteAdminCategory = asyncHandler(async (req: Request, res: Response) => {
-    const { id } = req.params as unknown as ServiceCategoryIdParams;
-    const result = await ServicesService.deleteAdminCategory(id);
-
-    successResponse({
-      res,
-      message: 'Service category deleted successfully',
       data: result,
     });
   });
@@ -193,39 +96,6 @@ export class ServicesController {
       res,
       message: 'Service item deleted successfully',
       data: result,
-    });
-  });
-
-  static listAdminRequests = asyncHandler(async (req: Request, res: Response) => {
-    const result = await ServicesService.listAdminRequests(req.query as unknown as ServiceRequestQuery);
-
-    successResponse({
-      res,
-      message: 'Service requests retrieved successfully',
-      data: result.requests,
-      meta: result.meta,
-    });
-  });
-
-  static getAdminRequestById = asyncHandler(async (req: Request, res: Response) => {
-    const { id } = req.params as unknown as ServiceRequestIdParams;
-    const request = await ServicesService.getAdminRequestById(id);
-
-    successResponse({
-      res,
-      message: 'Service request retrieved successfully',
-      data: request,
-    });
-  });
-
-  static updateAdminRequestStatus = asyncHandler(async (req: Request, res: Response) => {
-    const { id } = req.params as unknown as ServiceRequestIdParams;
-    const request = await ServicesService.updateAdminRequestStatus(id, req.body as UpdateServiceRequestStatusInput);
-
-    successResponse({
-      res,
-      message: 'Service request status updated successfully',
-      data: request,
     });
   });
 }

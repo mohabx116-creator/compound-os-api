@@ -9,7 +9,6 @@
     "build": "prisma generate && node --max-old-space-size=4096 node_modules/typescript/bin/tsc",
     "start": "node dist/server.js",
     "type-check": "node --max-old-space-size=4096 node_modules/typescript/bin/tsc --noEmit",
-    "seed:services": "tsx scripts/seed_services_demo_data.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
