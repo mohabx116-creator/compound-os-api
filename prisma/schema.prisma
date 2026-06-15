@@ -164,6 +164,8 @@ model Compound {
   complaints        Complaint[]
   serviceCategories ServiceCategory[]
   serviceProviders  ServiceProvider[]
+  serviceItems      ServiceItem[]
+  serviceRequests   ServiceRequest[]
   rentalOwners      RentalOwner[]
   rentalListings    RentalListing[]
   rentalInquiries   RentalInquiry[]
@@ -641,6 +643,24 @@ enum ProviderStatus {
   INACTIVE
 }
 
+enum ServiceItemStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ServiceRequestPriority {
+  NORMAL
+  URGENT
+}
+
+enum ServiceRequestStatus {
+  NEW
+  IN_REVIEW
+  CONTACTED
+  DONE
+  CANCELLED
+}
+
 model ServiceCategory {
   id          String   @id @default(uuid())
   compoundId  String   @map("compound_id")
@@ -656,6 +676,7 @@ model ServiceCategory {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   providers   ServiceProvider[]
+  items       ServiceItem[]
 
   @@unique([compoundId, slug])
   @@index([compoundId])
@@ -691,6 +712,40 @@ model ServiceProvider {
   @@map("service_providers")
 }
 
+model ServiceItem {
+  id             String             @id @default(cuid())
+  compoundId     String             @map("compound_id")
+  compound       Compound           @relation(fields: [compoundId], references: [id], onDelete: Cascade)
+  categoryId     String             @map("category_id")
+  category       ServiceCategory    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  title          String
+  slug           String
+  description    String?
+  imageUrl       String?            @map("image_url")
+  locationText   String?            @map("location_text")
+  workingHours   String?            @map("working_hours")
+  phone          String?
+  whatsapp       String?
+  isPublic       Boolean            @default(true) @map("is_public")
+  isFeatured     Boolean            @default(false) @map("is_featured")
+  acceptsRequests Boolean           @default(true) @map("accepts_requests")
+  sortOrder      Int                @default(0) @map("sort_order")
+  status         ServiceItemStatus  @default(ACTIVE)
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+
+  requests ServiceRequest[]
+
+  @@unique([compoundId, slug])
+  @@index([compoundId])
+  @@index([categoryId])
+  @@index([status])
+  @@index([isPublic])
+  @@index([isFeatured])
+  @@index([sortOrder])
+  @@map("service_items")
+}
+
 enum RentalBedStatus {
   AVAILABLE
   RESERVED
@@ -709,6 +764,7 @@ enum AdminNotificationEventType {
   RENTAL_INQUIRY_CANCELLED
   RENTAL_OWNER_SUBMISSION_APPROVED
   RENTAL_OWNER_SUBMISSION_REJECTED
+  SERVICE_REQUEST_CREATED
   SYSTEM
 }
 
@@ -717,6 +773,7 @@ enum AdminNotificationEntityType {
   RENTAL_OWNER_SUBMISSION
   RENTAL_LISTING
   RENTAL_TENANT
+  SERVICE_REQUEST
   SYSTEM
 }
 
@@ -739,6 +796,32 @@ model RentalBed {
   @@index([inquiryId])
   @@index([reservationId])
   @@map("rental_beds")
+}
+
+model ServiceRequest {
+  id                 String               @id @default(cuid())
+  compoundId         String               @map("compound_id")
+  compound           Compound             @relation(fields: [compoundId], references: [id], onDelete: Cascade)
+  serviceItemId      String               @map("service_item_id")
+  serviceItem        ServiceItem          @relation(fields: [serviceItemId], references: [id], onDelete: Restrict)
+  requesterName      String               @map("requester_name")
+  requesterPhone     String               @map("requester_phone")
+  unitText           String?              @map("unit_text")
+  problemDescription String               @map("problem_description")
+  priority           ServiceRequestPriority @default(NORMAL)
+  status             ServiceRequestStatus @default(NEW)
+  preferredTime      String?              @map("preferred_time")
+  imageUrl           String?              @map("image_url")
+  adminNotes         String?              @map("admin_notes")
+  createdAt          DateTime             @default(now()) @map("created_at")
+  updatedAt          DateTime             @updatedAt @map("updated_at")
+
+  @@index([compoundId])
+  @@index([serviceItemId])
+  @@index([status])
+  @@index([priority])
+  @@index([createdAt])
+  @@map("service_requests")
 }
 
 model AdminNotification {
