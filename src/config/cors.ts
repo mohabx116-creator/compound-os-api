@@ -15,6 +15,9 @@ const LOCAL_DEVELOPMENT_ORIGINS = [
 function getAllowedOrigins() {
   const origins = new Set(env.CORS_ORIGINS);
 
+  // Always allow the public services web origin
+  origins.add('https://compound-os-services-web.vercel.app');
+
   if (env.NODE_ENV !== 'production') {
     for (const origin of LOCAL_DEVELOPMENT_ORIGINS) {
       origins.add(origin);
