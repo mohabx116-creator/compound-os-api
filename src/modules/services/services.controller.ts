@@ -1,6 +1,10 @@
 import { Request, Response } from 'express';
+import { v2 as cloudinary } from 'cloudinary';
 import { asyncHandler } from '../../common/utils/async-handler.js';
 import { successResponse } from '../../common/utils/api-response.js';
+import { env } from '../../config/env.js';
+import { AppError } from '../../common/errors/AppError.js';
+import { ErrorCodes } from '../../common/errors/error-codes.js';
 import { ServicesService } from './services.service.js';
 import type {
   AdminServiceItemQuery,
@@ -96,6 +100,68 @@ export class ServicesController {
       res,
       message: 'Service item deleted successfully',
       data: result,
+    });
+  });
+
+  static uploadImages = asyncHandler(async (req: Request, res: Response) => {
+    if (!env.CLOUDINARY_CLOUD_NAME || !env.CLOUDINARY_API_KEY || !env.CLOUDINARY_API_SECRET) {
+      throw new AppError(
+        'خدمة رفع الصور غير مهيأة على الخادم. يرجى إعداد متغيرات البيئة الخاصة بـ Cloudinary.',
+        500,
+        ErrorCodes.CLOUDINARY_NOT_CONFIGURED
+      );
+    }
+
+    const files = req.files as Express.Multer.File[] | undefined;
+    if (!files || files.length === 0) {
+      throw new AppError('لم يتم اختيار أي ملفات للرفع.', 400, ErrorCodes.BAD_REQUEST);
+    }
+
+    // Configure Cloudinary dynamically inside request
+    cloudinary.config({
+      cloud_name: env.CLOUDINARY_CLOUD_NAME,
+      api_key: env.CLOUDINARY_API_KEY,
+      api_secret: env.CLOUDINARY_API_SECRET,
+      secure: true,
+    });
+
+    const uploadPromises = files.map((file) => {
+      return new Promise<{ url: string; publicId: string; width: number; height: number }>((resolve, reject) => {
+        const base64Data = file.buffer.toString('base64');
+        const fileUri = `data:${file.mimetype};base64,${base64Data}`;
+
+        cloudinary.uploader.upload(
+          fileUri,
+          {
+            folder: 'compound-os/services',
+            resource_type: 'image',
+          },
+          (error, result) => {
+            if (error) {
+              return reject(error);
+            }
+            if (!result) {
+              return reject(new Error('Cloudinary response is empty'));
+            }
+            resolve({
+              url: result.secure_url,
+              publicId: result.public_id,
+              width: result.width,
+              height: result.height,
+            });
+          }
+        );
+      });
+    });
+
+    const uploadedImages = await Promise.all(uploadPromises);
+
+    successResponse({
+      res,
+      message: 'Images uploaded successfully',
+      data: {
+        images: uploadedImages,
+      },
     });
   });
 }

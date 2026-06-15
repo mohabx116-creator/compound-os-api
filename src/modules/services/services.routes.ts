@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { validate } from '../../common/middlewares/validate.middleware.js';
 import { requireAdminRole, requireAuth } from '../auth/auth.middleware.js';
 import { ServicesController } from './services.controller.js';
+import { servicesUpload } from './services.upload.js';
 import {
   adminServiceItemQuerySchema,
   createServiceItemSchema,
@@ -31,6 +32,13 @@ router.get(
   '/items/:slug',
   validate({ params: serviceItemSlugParamsSchema, query: servicePublicQuerySchema }),
   ServicesController.getPublicItemBySlug,
+);
+
+router.post(
+  '/admin/uploads/images',
+  ...requireServicesAdmin,
+  servicesUpload.array('images', 5),
+  ServicesController.uploadImages,
 );
 
 router.get(
