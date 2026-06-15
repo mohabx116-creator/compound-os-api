@@ -17,6 +17,7 @@ function getAllowedOrigins() {
 
   // Always allow the public services web origin
   origins.add('https://compound-os-services-web.vercel.app');
+  origins.add('https://services-ds-core-91.dalilsubhi.com');
 
   if (env.NODE_ENV !== 'production') {
     for (const origin of LOCAL_DEVELOPMENT_ORIGINS) {
