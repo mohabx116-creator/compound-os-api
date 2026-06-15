@@ -11,6 +11,7 @@ import { serviceProviderRoutes } from '../modules/service-providers/service-prov
 import { servicesRoutes } from '../modules/services/services.routes.js';
 import { rentalRoutes } from '../modules/rentals/rental.routes.js';
 import { adminNotificationRoutes } from '../modules/admin-notifications/admin-notification.routes.js';
+import { adminDashboardRoutes } from '../modules/admin-dashboard/admin-dashboard.routes.js';
 
 const router = Router();
 
@@ -30,5 +31,6 @@ router.use('/service-providers', serviceProviderRoutes);
 router.use('/services', servicesRoutes);
 router.use('/rentals', rentalRoutes);
 router.use('/admin/notifications', requireAuth, requireAdminRole, adminNotificationRoutes);
+router.use('/admin/dashboard', requireAuth, requireAdminRole, adminDashboardRoutes);
 
 export const apiRoutes = router;
