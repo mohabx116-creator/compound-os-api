@@ -2867,7 +2867,7 @@ export class RentalService {
       await RentalService.syncListingBeds(tx, listing.id, listing.totalBeds);
       publicListingsCache.clear();
       return RentalService.syncListingCountersFromBeds(listing.id, tx);
-    });
+    }, { maxWait: 10000, timeout: 20000 });
   }
 
   static async updateAdminListing(id: RentalIdParams['id'], input: AdminUpdateListingInput) {
@@ -2986,7 +2986,7 @@ export class RentalService {
       await RentalService.syncListingBeds(tx, listing.id, listing.totalBeds);
       publicListingsCache.clear();
       return RentalService.syncListingCountersFromBeds(listing.id, tx);
-    });
+    }, { maxWait: 10000, timeout: 20000 });
   }
 
   static async publishAdminListing(id: RentalIdParams['id']) {
