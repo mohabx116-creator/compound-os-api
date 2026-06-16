@@ -193,6 +193,8 @@ export interface AdminCreateListingInput {
   platformCommissionRate?: number;
   addressText?: string;
   locationText?: string;
+  buildingNumber?: string;
+  apartmentNumber?: string;
   images?: AdminListingImageInput[];
   totalBeds?: number;
 }

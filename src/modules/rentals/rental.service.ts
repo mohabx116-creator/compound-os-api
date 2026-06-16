@@ -1877,6 +1877,7 @@ export class RentalService {
         include: adminListingInclude,
       });
       await RentalService.syncListingBeds(tx, listing.id, listing.totalBeds);
+      publicListingsCache.clear();
       return RentalService.syncListingCountersFromBeds(listing.id, tx);
     });
   }
@@ -1958,9 +1959,9 @@ export class RentalService {
           unitCondition: input.unitCondition,
           basics: input.basics,
           amenities: input.amenities,
-          bedrooms: 2,
+          bedrooms: input.bedrooms ?? existing.bedrooms,
           bathrooms: input.bathrooms,
-          areaSqm: 63,
+          areaSqm: input.areaSqm ?? existing.areaSqm,
           floor: input.floor,
           isAirConditioned: input.isAirConditioned,
           basicFeatures: input.basicFeatures !== undefined ? RentalService.normalizeBasicFeatures(input.basicFeatures) : undefined,
@@ -1994,6 +1995,7 @@ export class RentalService {
         include: adminListingInclude,
       });
       await RentalService.syncListingBeds(tx, listing.id, listing.totalBeds);
+      publicListingsCache.clear();
       return RentalService.syncListingCountersFromBeds(listing.id, tx);
     });
   }
@@ -2499,9 +2501,9 @@ export class RentalService {
       return tx.rentalOwner.update({
         where: { id: owner.id },
         data: {
-          fullName: owner.fullName || input.ownerName.trim(),
-          phone: owner.phone || input.ownerPhone,
-          whatsappPhone: owner.whatsappPhone || input.ownerWhatsapp,
+          fullName: input.ownerName.trim() || owner.fullName,
+          phone: input.ownerPhone || owner.phone,
+          whatsappPhone: input.ownerWhatsapp || owner.whatsappPhone,
           status: RentalOwnerStatus.ACTIVE,
         },
       });
@@ -2523,8 +2525,8 @@ export class RentalService {
       return tx.rentalOwner.update({
         where: { id: owner.id },
         data: {
-          fullName: owner.fullName || input.ownerName.trim(),
-          whatsappPhone: owner.whatsappPhone || input.ownerWhatsapp,
+          fullName: input.ownerName.trim() || owner.fullName,
+          whatsappPhone: input.ownerWhatsapp || owner.whatsappPhone,
           status: RentalOwnerStatus.ACTIVE,
         },
       });
