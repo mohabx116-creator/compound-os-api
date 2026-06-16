@@ -2838,8 +2838,7 @@ export class RentalService {
             input.platformCommissionRate ?? RENTAL_POLICY.platformCommissionRate,
           addressText: cleanText(input.addressText),
           locationText: cleanText(input.locationText),
-          buildingNumber: cleanText(input.buildingNumber),
-          apartmentNumber: cleanText(input.apartmentNumber),
+          // buildingNumber and apartmentNumber omitted until Prisma migration is complete
           status: RentalListingStatus.PENDING_REVIEW,
           isFeatured: input.isFeatured ?? false,
           totalBeds: input.totalBeds ?? 4,
@@ -2962,8 +2961,7 @@ export class RentalService {
           platformCommissionRate: input.platformCommissionRate,
           addressText: input.addressText,
           locationText: input.locationText,
-          buildingNumber: input.buildingNumber !== undefined ? cleanText(input.buildingNumber) : undefined,
-          apartmentNumber: input.apartmentNumber !== undefined ? cleanText(input.apartmentNumber) : undefined,
+          // buildingNumber and apartmentNumber omitted until Prisma migration is complete
           totalBeds: input.totalBeds,
           images: input.images
             ? {
