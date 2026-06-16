@@ -338,8 +338,8 @@ export const adminCreateListingSchema = z
     platformCommissionRate: z.number().nonnegative().max(100).optional(),
     addressText: optionalText(500),
     locationText: optionalText(500),
-    buildingNumber: z.string().trim().min(1, 'Building number is required').max(100),
-    apartmentNumber: z.string().trim().min(1, 'Apartment number is required').max(100),
+    buildingNumber: optionalText(50),
+    apartmentNumber: optionalText(50),
     images: z.array(listingImageSchema).max(20).optional(),
     totalBeds: z.number().int().min(1).max(20).optional(),
   })
