@@ -1,0 +1,58 @@
+import { Request, Response } from 'express';
+import { realEstateService } from './real-estate.service.js';
+import { 
+  PublicListingsQuerySchema, 
+  CreateOwnerSubmissionSchema, 
+  CreateRealEstateInquirySchema 
+} from './real-estate.schema.js';
+import { mapPublicListingsDto, mapPublicListingDto } from './real-estate.mapper.js';
+
+export const getListings = async (req: Request, res: Response) => {
+  try {
+    const filters = PublicListingsQuerySchema.parse(req.query);
+    const listings = await realEstateService.getPublicListings(filters);
+    
+    // Privacy: Strip internal data
+    const safeListings = mapPublicListingsDto(listings);
+    
+    res.json({ success: true, data: safeListings });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+export const getListingBySlug = async (req: Request, res: Response) => {
+  try {
+    const listing = await realEstateService.getPublicListingBySlug(req.params.slug);
+    if (!listing) {
+      return res.status(404).json({ success: false, message: 'Listing not found' });
+    }
+    
+    // Privacy: Strip internal data
+    const safeListing = mapPublicListingDto(listing);
+    
+    res.json({ success: true, data: safeListing });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const createOwnerSubmission = async (req: Request, res: Response) => {
+  try {
+    const data = CreateOwnerSubmissionSchema.parse(req.body);
+    const submission = await realEstateService.createOwnerSubmission(data);
+    res.status(201).json({ success: true, data: { id: submission.id, status: submission.status } });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+export const createInquiry = async (req: Request, res: Response) => {
+  try {
+    const data = CreateRealEstateInquirySchema.parse(req.body);
+    const inquiry = await realEstateService.createInquiry(data);
+    res.status(201).json({ success: true, data: { id: inquiry.id, status: inquiry.status } });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
