@@ -13,6 +13,8 @@ import { rentalRoutes } from '../modules/rentals/rental.routes.js';
 import { adminNotificationRoutes } from '../modules/admin-notifications/admin-notification.routes.js';
 import { adminDashboardRoutes } from '../modules/admin-dashboard/admin-dashboard.routes.js';
 import { adminSettingsRoutes } from '../modules/admin-settings/admin-settings.routes.js';
+import { realEstateRoutes } from '../modules/real-estate/real-estate.routes.js';
+import { adminRealEstateRoutes } from '../modules/real-estate/admin-real-estate.routes.js';
 
 const router = Router();
 
@@ -31,8 +33,11 @@ router.use('/service-categories', serviceCategoryRoutes);
 router.use('/service-providers', serviceProviderRoutes);
 router.use('/services', servicesRoutes);
 router.use('/rentals', rentalRoutes);
+router.use('/real-estate', realEstateRoutes);
+
 router.use('/admin/notifications', requireAuth, requireAdminRole, adminNotificationRoutes);
 router.use('/admin/dashboard', requireAuth, requireAdminRole, adminDashboardRoutes);
 router.use('/admin/settings', requireAuth, requireAdminRole, adminSettingsRoutes);
+router.use('/admin/real-estate', requireAuth, requireAdminRole, adminRealEstateRoutes);
 
 export const apiRoutes = router;
