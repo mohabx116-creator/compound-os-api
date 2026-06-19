@@ -850,6 +850,16 @@ enum RealEstateFinishing {
   SEMI_FINISHED
   FULLY_FINISHED
   FURNISHED
+  SUPER_LUX
+  LUX
+  UNFINISHED
+  OLD_FINISH
+}
+
+enum RealEstateFurnishingStatus {
+  FURNISHED
+  UNFURNISHED
+  SEMI_FURNISHED
 }
 
 enum RealEstateInquiryType {
@@ -895,16 +905,20 @@ model RealEstateListing {
   internalNotes String? @map("internal_notes")
 
   // Apartment/Unit optional fields
-  bedrooms        Int?
-  bathrooms       Int?
-  floor           Int?
-  buildingNumber  String?              @map("building_number")
-  apartmentNumber String?              @map("apartment_number")
-  finishingType   RealEstateFinishing? @map("finishing_type")
-  deliveryStatus  String?              @map("delivery_status")
-  hasElevator     Boolean?             @map("has_elevator")
-  hasParking      Boolean?             @map("has_parking")
-  view            String?
+  bedrooms         Int?
+  bathrooms        Int?
+  floor            Int?
+  balconies        Int?
+  receptionRooms   Int?                        @map("reception_rooms")
+  buildingAge      Int?                        @map("building_age")
+  buildingNumber   String?                     @map("building_number")
+  apartmentNumber  String?                     @map("apartment_number")
+  finishingType    RealEstateFinishing?        @map("finishing_type")
+  furnishingStatus RealEstateFurnishingStatus? @map("furnishing_status")
+  deliveryStatus   String?                     @map("delivery_status")
+  hasElevator      Boolean?                    @map("has_elevator")
+  hasParking       Boolean?                    @map("has_parking")
+  view             String?
 
   // Land optional fields
   pricePerMeter      Decimal? @map("price_per_meter") @db.Decimal(12, 2)
@@ -915,6 +929,7 @@ model RealEstateListing {
   utilitiesAvailable Boolean? @map("utilities_available")
   cornerPlot         Boolean? @map("corner_plot")
   isRegistered       Boolean? @map("is_registered")
+  hasBuildingPermit  Boolean? @map("has_building_permit")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -966,19 +981,24 @@ model RealEstateOwnerSubmission {
   bedrooms           Int?
   bathrooms          Int?
   floor              Int?
-  buildingNumber     String?              @map("building_number")
-  apartmentNumber    String?              @map("apartment_number")
-  finishingType      RealEstateFinishing? @map("finishing_type")
-  hasElevator        Boolean?             @map("has_elevator")
-  hasParking         Boolean?             @map("has_parking")
-  pricePerMeter      Decimal?             @map("price_per_meter") @db.Decimal(12, 2)
-  frontage           Decimal?             @db.Decimal(10, 2)
-  depth              Decimal?             @db.Decimal(10, 2)
-  streetWidth        Decimal?             @map("street_width") @db.Decimal(10, 2)
-  landUse            String?              @map("land_use")
-  utilitiesAvailable Boolean?             @map("utilities_available")
-  cornerPlot         Boolean?             @map("corner_plot")
-  isRegistered       Boolean?             @map("is_registered")
+  balconies          Int?
+  receptionRooms     Int?                        @map("reception_rooms")
+  buildingAge        Int?                        @map("building_age")
+  buildingNumber     String?                     @map("building_number")
+  apartmentNumber    String?                     @map("apartment_number")
+  finishingType      RealEstateFinishing?        @map("finishing_type")
+  furnishingStatus   RealEstateFurnishingStatus? @map("furnishing_status")
+  hasElevator        Boolean?                    @map("has_elevator")
+  hasParking         Boolean?                    @map("has_parking")
+  pricePerMeter      Decimal?                    @map("price_per_meter") @db.Decimal(12, 2)
+  frontage           Decimal?                    @db.Decimal(10, 2)
+  depth              Decimal?                    @db.Decimal(10, 2)
+  streetWidth        Decimal?                    @map("street_width") @db.Decimal(10, 2)
+  landUse            String?                     @map("land_use")
+  utilitiesAvailable Boolean?                    @map("utilities_available")
+  cornerPlot         Boolean?                    @map("corner_plot")
+  isRegistered       Boolean?                    @map("is_registered")
+  hasBuildingPermit  Boolean?                    @map("has_building_permit")
 
   status           RealEstateSubmissionStatus @default(PENDING)
   adminNotes       String?                    @map("admin_notes")

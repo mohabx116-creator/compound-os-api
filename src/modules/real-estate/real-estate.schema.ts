@@ -6,12 +6,14 @@ import {
   RealEstateInquiryType,
   RealEstateInquiryStatus,
   RealEstateSubmissionStatus,
+  RealEstateFurnishingStatus,
 } from '@prisma/client';
 
 // Shared Enums mapping for Zod
 const realEstateTypeEnum = z.nativeEnum(RealEstateType);
 const realEstateStatusEnum = z.nativeEnum(RealEstateStatus);
 const realEstateFinishingEnum = z.nativeEnum(RealEstateFinishing);
+const realEstateFurnishingStatusEnum = z.nativeEnum(RealEstateFurnishingStatus);
 const realEstateInquiryTypeEnum = z.nativeEnum(RealEstateInquiryType);
 const realEstateInquiryStatusEnum = z.nativeEnum(RealEstateInquiryStatus);
 const realEstateSubmissionStatusEnum = z.nativeEnum(RealEstateSubmissionStatus);
@@ -53,9 +55,13 @@ export const CreateOwnerSubmissionSchema = z.object({
   bedrooms: z.number().int().nonnegative().optional(),
   bathrooms: z.number().int().nonnegative().optional(),
   floor: z.number().int().optional(),
+  balconies: z.number().int().nonnegative().optional(),
+  receptionRooms: z.number().int().nonnegative().optional(),
+  buildingAge: z.number().int().nonnegative().optional(),
   buildingNumber: z.string().optional(),
   apartmentNumber: z.string().optional(),
   finishingType: realEstateFinishingEnum.optional(),
+  furnishingStatus: realEstateFurnishingStatusEnum.optional(),
   hasElevator: z.boolean().optional(),
   hasParking: z.boolean().optional(),
   
@@ -68,6 +74,7 @@ export const CreateOwnerSubmissionSchema = z.object({
   utilitiesAvailable: z.boolean().optional(),
   cornerPlot: z.boolean().optional(),
   isRegistered: z.boolean().optional(),
+  hasBuildingPermit: z.boolean().optional(),
 
   images: z.array(ImageSchema).max(12).optional(),
 });
@@ -96,9 +103,13 @@ export const AdminCreateRealEstateListingSchema = z.object({
   bedrooms: z.number().int().nonnegative().optional(),
   bathrooms: z.number().int().nonnegative().optional(),
   floor: z.number().int().optional(),
+  balconies: z.number().int().nonnegative().optional(),
+  receptionRooms: z.number().int().nonnegative().optional(),
+  buildingAge: z.number().int().nonnegative().optional(),
   buildingNumber: z.string().optional(),
   apartmentNumber: z.string().optional(),
   finishingType: realEstateFinishingEnum.optional(),
+  furnishingStatus: realEstateFurnishingStatusEnum.optional(),
   deliveryStatus: z.string().optional(),
   hasElevator: z.boolean().optional(),
   hasParking: z.boolean().optional(),
@@ -112,6 +123,7 @@ export const AdminCreateRealEstateListingSchema = z.object({
   utilitiesAvailable: z.boolean().optional(),
   cornerPlot: z.boolean().optional(),
   isRegistered: z.boolean().optional(),
+  hasBuildingPermit: z.boolean().optional(),
 
   images: z.array(ImageSchema).max(20).optional(),
 });
