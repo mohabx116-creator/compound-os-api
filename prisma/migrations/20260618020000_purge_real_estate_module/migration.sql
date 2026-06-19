@@ -1,4 +1,4 @@
-﻿-- Delete real-estate notifications before altering enum
+-- Delete real-estate notifications before altering enum
 DELETE FROM "admin_notifications" WHERE "event_type" IN ('REAL_ESTATE_OWNER_SUBMISSION_CREATED', 'REAL_ESTATE_INQUIRY_CREATED');
 DELETE FROM "admin_notifications" WHERE "entity_type" IN ('REAL_ESTATE_INQUIRY', 'REAL_ESTATE_OWNER_SUBMISSION', 'REAL_ESTATE_LISTING');
 -- AlterEnum
