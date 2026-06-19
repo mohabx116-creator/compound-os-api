@@ -159,24 +159,22 @@ model Compound {
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
-  units                      Unit[]
-  residents                  Resident[]
-  complaints                 Complaint[]
-  serviceCategories          ServiceCategory[]
-  serviceProviders           ServiceProvider[]
-  serviceItems               ServiceItem[]
-  rentalOwners               RentalOwner[]
-  rentalListings             RentalListing[]
-  rentalInquiries            RentalInquiry[]
-  rentalUnlocks              RentalContactUnlock[]
-  rentalReservations         RentalReservation[]
-  rentalPayments             RentalPayment[]
-  rentalLedgerEntries        RentalPlatformLedgerEntry[]
-  rentalOwnerSubmissions     RentalOwnerSubmission[]
-  rentalTenants              RentalTenant[]
-  adminNotifications         AdminNotification[]
-  realEstateListings         RealEstateListing[]
-  realEstateOwnerSubmissions RealEstateOwnerSubmission[]
+  units                  Unit[]
+  residents              Resident[]
+  complaints             Complaint[]
+  serviceCategories      ServiceCategory[]
+  serviceProviders       ServiceProvider[]
+  serviceItems           ServiceItem[]
+  rentalOwners           RentalOwner[]
+  rentalListings         RentalListing[]
+  rentalInquiries        RentalInquiry[]
+  rentalUnlocks          RentalContactUnlock[]
+  rentalReservations     RentalReservation[]
+  rentalPayments         RentalPayment[]
+  rentalLedgerEntries    RentalPlatformLedgerEntry[]
+  rentalOwnerSubmissions RentalOwnerSubmission[]
+  rentalTenants          RentalTenant[]
+  adminNotifications     AdminNotification[]
 
   @@index([isActive])
   @@map("compounds")
@@ -759,8 +757,6 @@ enum AdminNotificationEventType {
   RENTAL_INQUIRY_CANCELLED
   RENTAL_OWNER_SUBMISSION_APPROVED
   RENTAL_OWNER_SUBMISSION_REJECTED
-  REAL_ESTATE_OWNER_SUBMISSION_CREATED
-  REAL_ESTATE_INQUIRY_CREATED
   SYSTEM
 }
 
@@ -769,9 +765,6 @@ enum AdminNotificationEntityType {
   RENTAL_OWNER_SUBMISSION
   RENTAL_LISTING
   RENTAL_TENANT
-  REAL_ESTATE_INQUIRY
-  REAL_ESTATE_OWNER_SUBMISSION
-  REAL_ESTATE_LISTING
   SYSTEM
 }
 
@@ -820,210 +813,4 @@ model AdminNotification {
   @@index([createdAt])
   @@index([compoundId])
   @@map("admin_notifications")
-}
-
-// ─── Real Estate Sales Module ───────────────────────────────────────────────
-
-enum RealEstateType {
-  APARTMENT
-  VILLA
-  STUDIO
-  DUPLEX
-  SHOP
-  OFFICE
-  LAND
-}
-
-enum RealEstateStatus {
-  DRAFT
-  PENDING_REVIEW
-  PUBLISHED
-  HIDDEN
-  UNDER_NEGOTIATION
-  RESERVED
-  SOLD
-  REJECTED
-}
-
-enum RealEstateFinishing {
-  CORE_AND_SHELL
-  SEMI_FINISHED
-  FULLY_FINISHED
-  FURNISHED
-}
-
-enum RealEstateInquiryType {
-  CONTACT
-  INSPECTION
-  INTEREST
-}
-
-enum RealEstateInquiryStatus {
-  NEW
-  CONTACTED
-  CLOSED
-}
-
-enum RealEstateSubmissionStatus {
-  PENDING
-  REVIEWED
-  APPROVED
-  REJECTED
-  CONVERTED
-}
-
-model RealEstateListing {
-  id          String           @id @default(uuid())
-  compoundId  String           @map("compound_id")
-  compound    Compound         @relation(fields: [compoundId], references: [id], onDelete: Cascade)
-  type        RealEstateType
-  title       String
-  slug        String           @unique
-  status      RealEstateStatus @default(DRAFT)
-  price       Decimal          @db.Decimal(12, 2)
-  areaSqm     Decimal          @map("area_sqm") @db.Decimal(10, 2)
-  description String
-  features    Json?
-  isFeatured  Boolean          @default(false) @map("is_featured")
-  sortOrder   Int              @default(0) @map("sort_order")
-  publishedAt DateTime?        @map("published_at")
-
-  ownerName     String  @map("owner_name")
-  ownerPhone    String  @map("owner_phone")
-  ownerWhatsapp String? @map("owner_whatsapp")
-  ownerEmail    String? @map("owner_email")
-  internalNotes String? @map("internal_notes")
-
-  // Apartment/Unit optional fields
-  bedrooms        Int?
-  bathrooms       Int?
-  floor           Int?
-  buildingNumber  String?              @map("building_number")
-  apartmentNumber String?              @map("apartment_number")
-  finishingType   RealEstateFinishing? @map("finishing_type")
-  deliveryStatus  String?              @map("delivery_status")
-  hasElevator     Boolean?             @map("has_elevator")
-  hasParking      Boolean?             @map("has_parking")
-  view            String?
-
-  // Land optional fields
-  pricePerMeter      Decimal? @map("price_per_meter") @db.Decimal(12, 2)
-  frontage           Decimal? @db.Decimal(10, 2)
-  depth              Decimal? @db.Decimal(10, 2)
-  streetWidth        Decimal? @map("street_width") @db.Decimal(10, 2)
-  landUse            String?  @map("land_use")
-  utilitiesAvailable Boolean? @map("utilities_available")
-  cornerPlot         Boolean? @map("corner_plot")
-  isRegistered       Boolean? @map("is_registered")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  images    RealEstateListingImage[]
-  inquiries RealEstateInquiry[]
-
-  @@index([compoundId])
-  @@index([status])
-  @@index([type])
-  @@index([type, status])
-  @@index([isFeatured])
-  @@index([sortOrder])
-  @@map("real_estate_listings")
-}
-
-model RealEstateListingImage {
-  id        String            @id @default(uuid())
-  listingId String            @map("listing_id")
-  listing   RealEstateListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
-  url       String
-  publicId  String?           @map("public_id")
-  alt       String?
-  isCover   Boolean           @default(false) @map("is_cover")
-  sortOrder Int               @default(0) @map("sort_order")
-  createdAt DateTime          @default(now()) @map("created_at")
-
-  @@index([listingId])
-  @@index([isCover])
-  @@map("real_estate_listing_images")
-}
-
-model RealEstateOwnerSubmission {
-  id                String         @id @default(uuid())
-  compoundId        String         @map("compound_id")
-  compound          Compound       @relation(fields: [compoundId], references: [id], onDelete: Cascade)
-  submitterName     String         @map("submitter_name")
-  submitterPhone    String         @map("submitter_phone")
-  submitterWhatsapp String?        @map("submitter_whatsapp")
-  submitterEmail    String?        @map("submitter_email")
-  type              RealEstateType
-  title             String
-  price             Decimal        @db.Decimal(12, 2)
-  areaSqm           Decimal        @map("area_sqm") @db.Decimal(10, 2)
-  description       String
-  features          Json?
-
-  // Optional fields mixed
-  bedrooms           Int?
-  bathrooms          Int?
-  floor              Int?
-  buildingNumber     String?              @map("building_number")
-  apartmentNumber    String?              @map("apartment_number")
-  finishingType      RealEstateFinishing? @map("finishing_type")
-  hasElevator        Boolean?             @map("has_elevator")
-  hasParking         Boolean?             @map("has_parking")
-  pricePerMeter      Decimal?             @map("price_per_meter") @db.Decimal(12, 2)
-  frontage           Decimal?             @db.Decimal(10, 2)
-  depth              Decimal?             @db.Decimal(10, 2)
-  streetWidth        Decimal?             @map("street_width") @db.Decimal(10, 2)
-  landUse            String?              @map("land_use")
-  utilitiesAvailable Boolean?             @map("utilities_available")
-  cornerPlot         Boolean?             @map("corner_plot")
-  isRegistered       Boolean?             @map("is_registered")
-
-  status           RealEstateSubmissionStatus @default(PENDING)
-  adminNotes       String?                    @map("admin_notes")
-  createdListingId String?                    @unique @map("created_listing_id")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  images RealEstateSubmissionImage[]
-
-  @@index([compoundId])
-  @@index([status])
-  @@index([type])
-  @@map("real_estate_owner_submissions")
-}
-
-model RealEstateSubmissionImage {
-  id           String                    @id @default(uuid())
-  submissionId String                    @map("submission_id")
-  submission   RealEstateOwnerSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  url          String
-  publicId     String?                   @map("public_id")
-  alt          String?
-  isCover      Boolean                   @default(false) @map("is_cover")
-  sortOrder    Int                       @default(0) @map("sort_order")
-  createdAt    DateTime                  @default(now()) @map("created_at")
-
-  @@index([submissionId])
-  @@map("real_estate_submission_images")
-}
-
-model RealEstateInquiry {
-  id               String                  @id @default(uuid())
-  listingId        String                  @map("listing_id")
-  listing          RealEstateListing       @relation(fields: [listingId], references: [id], onDelete: Cascade)
-  customerName     String                  @map("customer_name")
-  customerPhone    String                  @map("customer_phone")
-  customerWhatsapp String?                 @map("customer_whatsapp")
-  inquiryType      RealEstateInquiryType   @map("inquiry_type")
-  message          String?
-  status           RealEstateInquiryStatus @default(NEW)
-  createdAt        DateTime                @default(now()) @map("created_at")
-  updatedAt        DateTime                @updatedAt @map("updated_at")
-
-  @@index([listingId])
-  @@index([status])
-  @@map("real_estate_inquiries")
 }
