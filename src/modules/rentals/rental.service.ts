@@ -606,6 +606,7 @@ interface PublicListingsCacheEntry {
 
 interface PublicListingCountCacheEntry {
   totalCount: number;
+  availableCount: number;
   savedAt: number;
   expiresAt: number;
 }
@@ -1741,15 +1742,30 @@ export class RentalService {
 
     const now = new Date();
     const where = this.buildPublicListingWhere(query, now);
+    const availableWhere: Prisma.RentalListingWhereInput = {
+      ...where,
+      beds: {
+        some: {
+          status: RentalBedStatus.AVAILABLE,
+        },
+      },
+    };
     const pagination = getPrismaPagination(query);
     const cachedCount = publicListingCountCache.get(countCacheKey);
     const hasCachedExactCount = Boolean(cachedCount && cachedCount.expiresAt > nowMs);
+    const hasCachedAvailableCount = Boolean(cachedCount && cachedCount.expiresAt > nowMs);
     const shouldEagerCount = query.page > 1;
     const countPromise = shouldEagerCount && !hasCachedExactCount
       ? prisma.rentalListing.count({ where })
       : null;
+    const availableCountPromise = shouldEagerCount && !hasCachedAvailableCount
+      ? prisma.rentalListing.count({ where: availableWhere })
+      : null;
     if (countPromise) {
       void countPromise.catch(() => undefined);
+    }
+    if (availableCountPromise) {
+      void availableCountPromise.catch(() => undefined);
     }
     const queryStart = timing?.start();
     const prismaStart = timing?.start();
@@ -1801,34 +1817,75 @@ export class RentalService {
 
     const canDeriveExactCount =
       !hasNextPage && (query.page === 1 || pageListings.length > 0);
+    const canDeriveExactAvailableCount = !hasNextPage && query.page === 1;
     let totalCount: number;
+    let availableCount: number;
 
-    if (canDeriveExactCount) {
+    if (canDeriveExactCount && canDeriveExactAvailableCount) {
       totalCount = query.page === 1 ? pageListings.length : pagination.skip + pageListings.length;
+      availableCount = mappedListings.filter((listing) => (listing.availableBeds ?? 0) > 0).length;
       if (!hasCachedExactCount) {
         publicListingCountCache.set(countCacheKey, {
           totalCount,
+          availableCount,
           savedAt: Date.now(),
           expiresAt: Date.now() + PUBLIC_LISTING_COUNT_CACHE_TTL_MS,
         });
       }
-    } else if (hasCachedExactCount && cachedCount) {
+    } else if (hasCachedExactCount && hasCachedAvailableCount && cachedCount) {
       totalCount = cachedCount.totalCount;
+      availableCount = cachedCount.availableCount;
     } else {
-      const exactCount = countPromise
-        ? await countPromise
-        : await prisma.rentalListing.count({ where });
-      totalCount = exactCount;
-      publicListingCountCache.set(countCacheKey, {
-        totalCount: exactCount,
-        savedAt: Date.now(),
-        expiresAt: Date.now() + PUBLIC_LISTING_COUNT_CACHE_TTL_MS,
-      });
+      const needTotalCount = !canDeriveExactCount && !hasCachedExactCount;
+      const needAvailableCount = !canDeriveExactAvailableCount && !hasCachedAvailableCount;
+
+      if (needTotalCount && needAvailableCount) {
+        const [exactCount, exactAvailableCount] = await Promise.all([
+          countPromise ?? prisma.rentalListing.count({ where }),
+          availableCountPromise ?? prisma.rentalListing.count({ where: availableWhere }),
+        ]);
+        totalCount = exactCount;
+        availableCount = exactAvailableCount;
+      } else if (needTotalCount) {
+        totalCount = countPromise
+          ? await countPromise
+          : await prisma.rentalListing.count({ where });
+        availableCount = hasCachedAvailableCount && cachedCount
+          ? cachedCount.availableCount
+          : await prisma.rentalListing.count({ where: availableWhere });
+      } else if (needAvailableCount) {
+        totalCount = hasCachedExactCount && cachedCount
+          ? cachedCount.totalCount
+          : query.page === 1
+            ? pageListings.length
+            : pagination.skip + pageListings.length;
+        availableCount = availableCountPromise
+          ? await availableCountPromise
+          : await prisma.rentalListing.count({ where: availableWhere });
+      } else {
+        totalCount = hasCachedExactCount && cachedCount
+          ? cachedCount.totalCount
+          : query.page === 1
+            ? pageListings.length
+            : pagination.skip + pageListings.length;
+        availableCount = hasCachedAvailableCount && cachedCount
+          ? cachedCount.availableCount
+          : mappedListings.filter((listing) => (listing.availableBeds ?? 0) > 0).length;
+      }
+
+      if (!hasCachedExactCount || !hasCachedAvailableCount) {
+        publicListingCountCache.set(countCacheKey, {
+          totalCount,
+          availableCount,
+          savedAt: Date.now(),
+          expiresAt: Date.now() + PUBLIC_LISTING_COUNT_CACHE_TTL_MS,
+        });
+      }
     }
 
     const result: PublicListingsResponse = {
       listings: mappedListings,
-      meta: getPaginationMeta(query, totalCount),
+      meta: getPaginationMeta(query, totalCount, availableCount),
     };
 
     publicListingsCache.set(cacheKey, {
