@@ -604,6 +604,12 @@ interface PublicListingsCacheEntry {
   expiresAt: number;
 }
 
+interface PublicListingCountCacheEntry {
+  totalCount: number;
+  savedAt: number;
+  expiresAt: number;
+}
+
 interface PublicListingDetailCacheEntry {
   data: any;
   savedAt: number;
@@ -611,8 +617,10 @@ interface PublicListingDetailCacheEntry {
 }
 
 const PUBLIC_LISTINGS_CACHE_TTL_MS = 30_000;
+const PUBLIC_LISTING_COUNT_CACHE_TTL_MS = PUBLIC_LISTINGS_CACHE_TTL_MS;
 const PUBLIC_LISTING_DETAIL_CACHE_TTL_MS = 10_000;
 const publicListingsCache = new Map<string, PublicListingsCacheEntry>();
+const publicListingCountCache = new Map<string, PublicListingCountCacheEntry>();
 const publicListingDetailCache = new Map<string, PublicListingDetailCacheEntry>();
 
 type ServerTimingMetric = {
@@ -662,7 +670,29 @@ export class RentalServerTimingTrace {
 
 function clearPublicRentalReadCaches() {
   publicListingsCache.clear();
+  publicListingCountCache.clear();
   publicListingDetailCache.clear();
+}
+
+function buildPublicListingCacheKey(
+  query: RentalListQuery,
+  options: { includePagination: boolean },
+) {
+  const normalized: Record<string, string | number | boolean> = {};
+  const sortedKeys = Object.keys(query || {}).sort();
+
+  for (const key of sortedKeys) {
+    if (!options.includePagination && (key === 'page' || key === 'limit')) {
+      continue;
+    }
+
+    const value = query[key as keyof RentalListQuery];
+    if (value !== undefined && value !== null && value !== '') {
+      normalized[key] = value as string | number | boolean;
+    }
+  }
+
+  return JSON.stringify(normalized);
 }
 
 const RENTAL_BASIC_FEATURE_KEYS = [
@@ -1690,15 +1720,8 @@ export class RentalService {
   ): Promise<PublicListingsResponse> {
     const startTime = Date.now();
     const handlerStart = timing?.start();
-    const normalized: Record<string, any> = {};
-    const sortedKeys = Object.keys(query || {}).sort();
-    for (const key of sortedKeys) {
-      const val = (query as any)[key];
-      if (val !== undefined && val !== null && val !== '') {
-        normalized[key] = val;
-      }
-    }
-    const cacheKey = JSON.stringify(normalized);
+    const cacheKey = buildPublicListingCacheKey(query, { includePagination: true });
+    const countCacheKey = buildPublicListingCacheKey(query, { includePagination: false });
     const nowMs = Date.now();
     const cached = publicListingsCache.get(cacheKey);
 
@@ -1719,6 +1742,12 @@ export class RentalService {
     const now = new Date();
     const where = this.buildPublicListingWhere(query, now);
     const pagination = getPrismaPagination(query);
+    const cachedCount = publicListingCountCache.get(countCacheKey);
+    const hasCachedExactCount = Boolean(cachedCount && cachedCount.expiresAt > nowMs);
+    const countPromise = hasCachedExactCount ? null : prisma.rentalListing.count({ where });
+    if (countPromise) {
+      void countPromise.catch(() => undefined);
+    }
     const queryStart = timing?.start();
     const prismaStart = timing?.start();
 
@@ -1767,9 +1796,33 @@ export class RentalService {
       timing?.measure('mapping', listingsMapStart);
     }
 
+    const canDeriveExactCount =
+      !hasNextPage && (query.page === 1 || pageListings.length > 0);
+    let totalCount: number;
+
+    if (canDeriveExactCount) {
+      totalCount = query.page === 1 ? pageListings.length : pagination.skip + pageListings.length;
+      if (!hasCachedExactCount) {
+        publicListingCountCache.set(countCacheKey, {
+          totalCount,
+          savedAt: Date.now(),
+          expiresAt: Date.now() + PUBLIC_LISTING_COUNT_CACHE_TTL_MS,
+        });
+      }
+    } else if (hasCachedExactCount && cachedCount) {
+      totalCount = cachedCount.totalCount;
+    } else {
+      totalCount = await countPromise!;
+      publicListingCountCache.set(countCacheKey, {
+        totalCount,
+        savedAt: Date.now(),
+        expiresAt: Date.now() + PUBLIC_LISTING_COUNT_CACHE_TTL_MS,
+      });
+    }
+
     const result: PublicListingsResponse = {
       listings: mappedListings,
-      meta: getPaginationMeta(query, pagination.skip + pageListings.length + (hasNextPage ? 1 : 0)),
+      meta: getPaginationMeta(query, totalCount),
     };
 
     publicListingsCache.set(cacheKey, {
