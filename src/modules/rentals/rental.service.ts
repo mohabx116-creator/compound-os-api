@@ -99,18 +99,7 @@ const publicListingBaseSelect = {
     select: {
       id: true,
       name: true,
-      code: true,
       address: true,
-      logoUrl: true,
-    },
-  },
-  unit: {
-    select: {
-      id: true,
-      unitNumber: true,
-      unitType: true,
-      floor: true,
-      areaSqm: true,
     },
   },
 } satisfies Prisma.RentalListingSelect;
@@ -1732,7 +1721,7 @@ export class RentalService {
     const queryStart = timing?.start();
     const prismaStart = timing?.start();
 
-    const [totalCount, listings] = await prisma.$transaction([
+    const [totalCount, listings] = await Promise.all([
       prisma.rentalListing.count({ where }),
       prisma.rentalListing.findMany({
         where,
