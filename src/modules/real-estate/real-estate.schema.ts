@@ -37,9 +37,7 @@ export const CreateRealEstateInquirySchema = z.object({
   message: z.string().optional(),
 });
 
-// Create Public Owner Submission
 export const CreateOwnerSubmissionSchema = z.object({
-  compoundId: z.string().uuid(),
   submitterName: z.string().min(2),
   submitterPhone: z.string().min(8),
   submitterWhatsapp: z.string().optional(),
@@ -81,7 +79,7 @@ export const CreateOwnerSubmissionSchema = z.object({
 
 // Admin Create Listing
 export const AdminCreateRealEstateListingSchema = z.object({
-  compoundId: z.string().uuid(),
+  compoundId: z.string().uuid().optional(),
   type: realEstateTypeEnum,
   title: z.string().min(5),
   slug: z.string().min(3).optional(), // auto generated if missing

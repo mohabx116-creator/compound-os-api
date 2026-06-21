@@ -2,6 +2,8 @@ import { PrismaClient, RealEstateStatus, RealEstateSubmissionStatus, Prisma } fr
 
 const prisma = new PrismaClient();
 
+const DEFAULT_REAL_ESTATE_COMPOUND_CODE = 'black-horse';
+
 export class RealEstateService {
   // --- Public Methods ---
 
@@ -13,12 +15,17 @@ export class RealEstateService {
     minArea?: number;
     maxArea?: number;
   }) {
+    // Resolve compound securely server-side for public reads if none provided
+    const compound = filters.compoundId 
+      ? { id: filters.compoundId }
+      : await this.resolvePublicRealEstateCompound();
+
     const where: Prisma.RealEstateListingWhereInput = {
       status: RealEstateStatus.PUBLISHED,
+      compoundId: compound.id,
     };
 
     if (filters.type) where.type = filters.type;
-    if (filters.compoundId) where.compoundId = filters.compoundId;
     
     if (filters.minPrice || filters.maxPrice) {
       where.price = {};
@@ -66,6 +73,10 @@ export class RealEstateService {
 
   async createOwnerSubmission(data: any) {
     const { images, ...submissionData } = data;
+    
+    // Phase 2: Resolve public compound securely server-side
+    const compound = await this.resolvePublicRealEstateCompound();
+    submissionData.compoundId = compound.id;
     
     return prisma.$transaction(async (tx) => {
       const submission = await tx.realEstateOwnerSubmission.create({
@@ -166,7 +177,10 @@ export class RealEstateService {
   }
 
   async createAdminListing(data: any) {
-    const { images, slug, ...listingData } = data;
+    const { images, slug, compoundId, ...listingData } = data;
+    
+    // Phase 2: Resolve admin compound securely server-side
+    const compound = await this.resolveAdminRealEstateCompound(compoundId);
     
     const finalSlug = slug || this.generateSlug(listingData.title);
 
@@ -174,6 +188,7 @@ export class RealEstateService {
       const listing = await tx.realEstateListing.create({
         data: {
           ...listingData,
+          compoundId: compound.id,
           slug: finalSlug,
           publishedAt: listingData.status === RealEstateStatus.PUBLISHED ? new Date() : null,
         },
@@ -354,6 +369,38 @@ export class RealEstateService {
       where: { id },
       data: { status },
     });
+  }
+
+  // --- Context Resolvers ---
+  async resolvePublicRealEstateCompound() {
+    const compound = await prisma.compound.findFirst({
+      where: {
+        code: DEFAULT_REAL_ESTATE_COMPOUND_CODE,
+        isActive: true,
+      },
+    });
+
+    if (!compound || !compound.isActive) {
+      throw new Error('لم يتم العثور على مجمع صالح');
+    }
+
+    return compound;
+  }
+
+  async resolveAdminRealEstateCompound(authenticatedCompoundId?: string) {
+    if (!authenticatedCompoundId) {
+      throw new Error('لا يوجد مجمع مرتبط بحساب الإدارة الحالي');
+    }
+
+    const compound = await prisma.compound.findUnique({
+      where: { id: authenticatedCompoundId },
+    });
+
+    if (!compound || !compound.isActive) {
+      throw new Error('لا يوجد مجمع مرتبط بحساب الإدارة الحالي');
+    }
+
+    return compound;
   }
 }
 

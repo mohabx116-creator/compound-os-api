@@ -20,6 +20,7 @@ function getAllowedOrigins() {
   origins.add('https://services-ds-core-91.dalilsubhi.com');
   origins.add('https://dalilsubhi-realestate-web.vercel.app');
   origins.add('https://realestate-ds-core-91.dalilsubhi.com');
+  origins.add('https://ds-ops-7x.dalilsubhi.com');
 
   if (env.NODE_ENV !== 'production') {
     for (const origin of LOCAL_DEVELOPMENT_ORIGINS) {
