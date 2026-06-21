@@ -1718,22 +1718,23 @@ export class RentalService {
 
     const now = new Date();
     const where = this.buildPublicListingWhere(query, now);
+    const pagination = getPrismaPagination(query);
     const queryStart = timing?.start();
     const prismaStart = timing?.start();
 
-    const [totalCount, listings] = await Promise.all([
-      prisma.rentalListing.count({ where }),
-      prisma.rentalListing.findMany({
-        where,
-        ...getPrismaPagination(query),
-        select: {
-          ...publicListingListSelect,
-          pendingBeds: true,
-          rentedBeds: true,
-        },
-        orderBy: [{ isFeatured: 'desc' }, { createdAt: 'desc' }],
-      }),
-    ]);
+    const listings = await prisma.rentalListing.findMany({
+      where,
+      ...pagination,
+      take: pagination.take + 1,
+      select: {
+        ...publicListingListSelect,
+        pendingBeds: true,
+        rentedBeds: true,
+      },
+      orderBy: [{ isFeatured: 'desc' }, { createdAt: 'desc' }],
+    });
+    const hasNextPage = listings.length > pagination.take;
+    const pageListings = hasNextPage ? listings.slice(0, pagination.take) : listings;
     if (handlerStart && queryStart) {
       timing?.measure('entry', handlerStart, queryStart);
     }
@@ -1742,7 +1743,7 @@ export class RentalService {
     }
 
     const listingsMapStart = timing?.start();
-    const mappedListings = listings.map((listing) => {
+    const mappedListings = pageListings.map((listing) => {
       const relationMapStart = timing?.start();
       const optimized = withOptimizedRentalImages(listing);
       if (relationMapStart) {
@@ -1768,7 +1769,7 @@ export class RentalService {
 
     const result: PublicListingsResponse = {
       listings: mappedListings,
-      meta: getPaginationMeta(query, totalCount),
+      meta: getPaginationMeta(query, pagination.skip + pageListings.length + (hasNextPage ? 1 : 0)),
     };
 
     publicListingsCache.set(cacheKey, {
@@ -1780,7 +1781,7 @@ export class RentalService {
     const durationMs = Date.now() - startTime;
     const listingsCount = result.listings.length;
     console.info(
-      `[RentalsPublicListings] cache=MISS durationMs=${durationMs} totalCount=${totalCount} items=${listingsCount} filters=${cacheKey}`
+      `[RentalsPublicListings] cache=MISS durationMs=${durationMs} totalCount=${result.meta.totalCount} items=${listingsCount} filters=${cacheKey}`
     );
 
     return result;
