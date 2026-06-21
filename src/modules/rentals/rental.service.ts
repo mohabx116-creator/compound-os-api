@@ -615,7 +615,21 @@ interface PublicListingsCacheEntry {
   expiresAt: number;
 }
 
+interface PublicListingDetailCacheEntry {
+  data: any;
+  savedAt: number;
+  expiresAt: number;
+}
+
+const PUBLIC_LISTINGS_CACHE_TTL_MS = 30_000;
+const PUBLIC_LISTING_DETAIL_CACHE_TTL_MS = 10_000;
 const publicListingsCache = new Map<string, PublicListingsCacheEntry>();
+const publicListingDetailCache = new Map<string, PublicListingDetailCacheEntry>();
+
+function clearPublicRentalReadCaches() {
+  publicListingsCache.clear();
+  publicListingDetailCache.clear();
+}
 
 const RENTAL_BASIC_FEATURE_KEYS = [
   'internet',
@@ -1053,7 +1067,7 @@ export class RentalService {
         };
       }, { timeout: 20_000 });
 
-      publicListingsCache.clear();
+      clearPublicRentalReadCaches();
 
       step = 'load_conversion_result';
       return this.getOwnerSubmissionConversionResult(result.submissionId, result.listingId);
@@ -1690,7 +1704,7 @@ export class RentalService {
     publicListingsCache.set(cacheKey, {
       data: result,
       savedAt: Date.now(),
-      expiresAt: Date.now() + 30000,
+      expiresAt: Date.now() + PUBLIC_LISTINGS_CACHE_TTL_MS,
     });
 
     const durationMs = Date.now() - startTime;
@@ -1703,21 +1717,35 @@ export class RentalService {
   }
 
   static async getPublicListingBySlug(slug: RentalSlugParams['slug']) {
-    const listing = await prisma.rentalListing.findFirst({
-      where: {
-        slug,
-        status: RentalListingStatus.ACTIVE,
-        isPublished: true,
-        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-      },
+    const startTime = Date.now();
+    const cacheKey = slug.trim().toLowerCase();
+    const nowMs = Date.now();
+    const cached = publicListingDetailCache.get(cacheKey);
+
+    if (cached && cached.expiresAt > nowMs) {
+      console.info(
+        `[RentalsPublicListingDetail] cache=HIT durationMs=${Date.now() - startTime} slug=${cacheKey}`,
+      );
+      return cached.data;
+    }
+
+    const listing = await prisma.rentalListing.findUnique({
+      where: { slug: cacheKey },
       select: {
         ...publicListingDetailSelect,
+        isPublished: true,
         pendingBeds: true,
         rentedBeds: true,
       },
     });
+    const now = new Date();
 
-    if (!listing) {
+    if (
+      !listing ||
+      listing.status !== RentalListingStatus.ACTIVE ||
+      !listing.isPublished ||
+      (listing.expiresAt !== null && listing.expiresAt <= now)
+    ) {
       throw new AppError(
         'Rental listing not found',
         404,
@@ -1727,7 +1755,15 @@ export class RentalService {
 
     const optimized = withOptimizedRentalImages(listing);
     const withBeds = this.addAvailableBeds(optimized);
-    const { pendingBeds, rentedBeds, ...rest } = withBeds as any;
+    const { isPublished, pendingBeds, rentedBeds, ...rest } = withBeds as any;
+    publicListingDetailCache.set(cacheKey, {
+      data: rest,
+      savedAt: Date.now(),
+      expiresAt: Date.now() + PUBLIC_LISTING_DETAIL_CACHE_TTL_MS,
+    });
+    console.info(
+      `[RentalsPublicListingDetail] cache=MISS durationMs=${Date.now() - startTime} slug=${cacheKey}`,
+    );
     return rest;
   }
 
@@ -2865,7 +2901,7 @@ export class RentalService {
         include: adminListingInclude,
       });
       await RentalService.syncListingBeds(tx, listing.id, listing.totalBeds);
-      publicListingsCache.clear();
+      clearPublicRentalReadCaches();
       return RentalService.syncListingCountersFromBeds(listing.id, tx);
     }, { maxWait: 10000, timeout: 20000 });
   }
@@ -2984,7 +3020,7 @@ export class RentalService {
         include: adminListingInclude,
       });
       await RentalService.syncListingBeds(tx, listing.id, listing.totalBeds);
-      publicListingsCache.clear();
+      clearPublicRentalReadCaches();
       return RentalService.syncListingCountersFromBeds(listing.id, tx);
     }, { maxWait: 10000, timeout: 20000 });
   }
@@ -3020,6 +3056,7 @@ export class RentalService {
       },
       include: adminListingInclude,
     });
+    clearPublicRentalReadCaches();
     return this.addAvailableBeds(updated);
   }
 
@@ -3034,6 +3071,7 @@ export class RentalService {
       },
       include: adminListingInclude,
     });
+    clearPublicRentalReadCaches();
     return this.addAvailableBeds(updated);
   }
 
@@ -3048,6 +3086,7 @@ export class RentalService {
       },
       include: adminListingInclude,
     });
+    clearPublicRentalReadCaches();
     return this.addAvailableBeds(updated);
   }
 
@@ -3086,6 +3125,7 @@ export class RentalService {
       },
       include: adminListingInclude,
     });
+    clearPublicRentalReadCaches();
     return this.addAvailableBeds(updated);
   }
 
@@ -3115,6 +3155,7 @@ export class RentalService {
       },
       include: adminListingInclude,
     });
+    clearPublicRentalReadCaches();
     return this.addAvailableBeds(updated);
   }
 
@@ -3205,6 +3246,8 @@ export class RentalService {
         startedAt: now,
       };
     });
+
+    clearPublicRentalReadCaches();
 
     await this.ensureRentalTenantForReservation({
       reservation: result.tenantSource,
@@ -4276,7 +4319,7 @@ export class RentalService {
       include: adminListingInclude,
     });
 
-    publicListingsCache.clear();
+    clearPublicRentalReadCaches();
 
     return this.addAvailableBeds(updatedListing);
   }
