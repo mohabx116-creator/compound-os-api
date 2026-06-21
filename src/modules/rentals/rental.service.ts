@@ -626,6 +626,51 @@ const PUBLIC_LISTING_DETAIL_CACHE_TTL_MS = 10_000;
 const publicListingsCache = new Map<string, PublicListingsCacheEntry>();
 const publicListingDetailCache = new Map<string, PublicListingDetailCacheEntry>();
 
+type ServerTimingMetric = {
+  durMs: number;
+  desc?: string;
+};
+
+export class RentalServerTimingTrace {
+  private readonly metrics = new Map<string, ServerTimingMetric>();
+  private readonly order: string[] = [];
+
+  start(): bigint {
+    return process.hrtime.bigint();
+  }
+
+  measure(name: string, startedAt: bigint, endedAt: bigint = process.hrtime.bigint(), desc?: string): void {
+    const durMs = Number(endedAt - startedAt) / 1_000_000;
+    const existing = this.metrics.get(name);
+
+    if (!existing) {
+      this.order.push(name);
+      this.metrics.set(name, { durMs, desc });
+      return;
+    }
+
+    existing.durMs += durMs;
+    if (desc !== undefined) {
+      existing.desc = desc;
+    }
+  }
+
+  toHeader(): string {
+    return this.order
+      .map((name) => {
+        const metric = this.metrics.get(name);
+        if (!metric) return '';
+        const parts = [`${name};dur=${metric.durMs.toFixed(2)}`];
+        if (metric.desc) {
+          parts.push(`desc="${metric.desc.replaceAll('"', '\\"')}"`);
+        }
+        return parts.join(';');
+      })
+      .filter(Boolean)
+      .join(', ');
+  }
+}
+
 function clearPublicRentalReadCaches() {
   publicListingsCache.clear();
   publicListingDetailCache.clear();
@@ -1650,8 +1695,12 @@ export class RentalService {
     });
   }
 
-  static async listPublicListings(query: RentalListQuery): Promise<PublicListingsResponse> {
+  static async listPublicListings(
+    query: RentalListQuery,
+    timing?: RentalServerTimingTrace,
+  ): Promise<PublicListingsResponse> {
     const startTime = Date.now();
+    const handlerStart = timing?.start();
     const normalized: Record<string, any> = {};
     const sortedKeys = Object.keys(query || {}).sort();
     for (const key of sortedKeys) {
@@ -1665,6 +1714,10 @@ export class RentalService {
     const cached = publicListingsCache.get(cacheKey);
 
     if (cached && cached.expiresAt > nowMs) {
+      if (handlerStart) {
+        timing?.measure('entry', handlerStart);
+        timing?.measure('cache', handlerStart, undefined, 'hit');
+      }
       const durationMs = Date.now() - startTime;
       const listingsCount = cached.data.listings.length;
       const totalCount = cached.data.meta.totalCount;
@@ -1676,6 +1729,8 @@ export class RentalService {
 
     const now = new Date();
     const where = this.buildPublicListingWhere(query, now);
+    const queryStart = timing?.start();
+    const prismaStart = timing?.start();
 
     const [totalCount, listings] = await prisma.$transaction([
       prisma.rentalListing.count({ where }),
@@ -1690,14 +1745,40 @@ export class RentalService {
         orderBy: [{ isFeatured: 'desc' }, { createdAt: 'desc' }],
       }),
     ]);
+    if (handlerStart && queryStart) {
+      timing?.measure('entry', handlerStart, queryStart);
+    }
+    if (prismaStart) {
+      timing?.measure('prisma', prismaStart);
+    }
+
+    const listingsMapStart = timing?.start();
+    const mappedListings = listings.map((listing) => {
+      const relationMapStart = timing?.start();
+      const optimized = withOptimizedRentalImages(listing);
+      if (relationMapStart) {
+        timing?.measure('relation', relationMapStart);
+      }
+
+      const availabilityStart = timing?.start();
+      const withBeds = this.addAvailableBeds(optimized);
+      if (availabilityStart) {
+        timing?.measure('availability', availabilityStart);
+      }
+
+      const responseMapStart = timing?.start();
+      const { pendingBeds, rentedBeds, ...rest } = withBeds as any;
+      if (responseMapStart) {
+        timing?.measure('response', responseMapStart);
+      }
+      return rest;
+    });
+    if (listingsMapStart) {
+      timing?.measure('mapping', listingsMapStart);
+    }
 
     const result: PublicListingsResponse = {
-      listings: listings.map((listing) => {
-        const optimized = withOptimizedRentalImages(listing);
-        const withBeds = this.addAvailableBeds(optimized);
-        const { pendingBeds, rentedBeds, ...rest } = withBeds as any;
-        return rest;
-      }),
+      listings: mappedListings,
       meta: getPaginationMeta(query, totalCount),
     };
 
@@ -1716,19 +1797,29 @@ export class RentalService {
     return result;
   }
 
-  static async getPublicListingBySlug(slug: RentalSlugParams['slug']) {
+  static async getPublicListingBySlug(
+    slug: RentalSlugParams['slug'],
+    timing?: RentalServerTimingTrace,
+  ) {
     const startTime = Date.now();
+    const handlerStart = timing?.start();
     const cacheKey = slug.trim().toLowerCase();
     const nowMs = Date.now();
     const cached = publicListingDetailCache.get(cacheKey);
 
     if (cached && cached.expiresAt > nowMs) {
+      if (handlerStart) {
+        timing?.measure('entry', handlerStart);
+        timing?.measure('cache', handlerStart, undefined, 'hit');
+      }
       console.info(
         `[RentalsPublicListingDetail] cache=HIT durationMs=${Date.now() - startTime} slug=${cacheKey}`,
       );
       return cached.data;
     }
 
+    const queryStart = timing?.start();
+    const prismaStart = timing?.start();
     const listing = await prisma.rentalListing.findUnique({
       where: { slug: cacheKey },
       select: {
@@ -1752,10 +1843,30 @@ export class RentalService {
         ErrorCodes.RENTAL_LISTING_NOT_FOUND,
       );
     }
+    if (handlerStart && queryStart) {
+      timing?.measure('entry', handlerStart, queryStart);
+    }
+    if (prismaStart) {
+      timing?.measure('prisma', prismaStart);
+    }
 
+    const relationMapStart = timing?.start();
     const optimized = withOptimizedRentalImages(listing);
+    if (relationMapStart) {
+      timing?.measure('relation', relationMapStart);
+    }
+
+    const availabilityStart = timing?.start();
     const withBeds = this.addAvailableBeds(optimized);
+    if (availabilityStart) {
+      timing?.measure('availability', availabilityStart);
+    }
+
+    const responseMapStart = timing?.start();
     const { isPublished, pendingBeds, rentedBeds, ...rest } = withBeds as any;
+    if (responseMapStart) {
+      timing?.measure('response', responseMapStart);
+    }
     publicListingDetailCache.set(cacheKey, {
       data: rest,
       savedAt: Date.now(),

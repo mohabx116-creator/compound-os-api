@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { successResponse } from '../../common/utils/api-response.js';
 import { asyncHandler } from '../../common/utils/async-handler.js';
 import { RentalPaymentService } from './rental-payment.service.js';
-import { RentalService } from './rental.service.js';
+import { RentalServerTimingTrace, RentalService } from './rental.service.js';
 import type {
   AdminCreateListingInput,
   AdminRentalListQuery,
@@ -270,7 +270,17 @@ export class RentalController {
   });
 
   static listPublicListings = asyncHandler(async (req: Request, res: Response) => {
-    const result = await RentalService.listPublicListings(req.query as unknown as RentalListQuery);
+    const timing = new RentalServerTimingTrace();
+    const handlerStart = timing.start();
+    const result = await RentalService.listPublicListings(
+      req.query as unknown as RentalListQuery,
+      timing,
+    );
+    timing.measure('handler', handlerStart);
+    const serverTiming = timing.toHeader();
+    if (serverTiming) {
+      res.setHeader('Server-Timing', serverTiming);
+    }
 
     successResponse({
       res,
@@ -282,7 +292,14 @@ export class RentalController {
 
   static getPublicListingBySlug = asyncHandler(async (req: Request, res: Response) => {
     const { slug } = req.params as unknown as RentalSlugParams;
-    const listing = await RentalService.getPublicListingBySlug(slug);
+    const timing = new RentalServerTimingTrace();
+    const handlerStart = timing.start();
+    const listing = await RentalService.getPublicListingBySlug(slug, timing);
+    timing.measure('handler', handlerStart);
+    const serverTiming = timing.toHeader();
+    if (serverTiming) {
+      res.setHeader('Server-Timing', serverTiming);
+    }
 
     successResponse({
       res,
