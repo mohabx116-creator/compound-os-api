@@ -1744,7 +1744,10 @@ export class RentalService {
     const pagination = getPrismaPagination(query);
     const cachedCount = publicListingCountCache.get(countCacheKey);
     const hasCachedExactCount = Boolean(cachedCount && cachedCount.expiresAt > nowMs);
-    const countPromise = hasCachedExactCount ? null : prisma.rentalListing.count({ where });
+    const shouldEagerCount = query.page > 1;
+    const countPromise = shouldEagerCount && !hasCachedExactCount
+      ? prisma.rentalListing.count({ where })
+      : null;
     if (countPromise) {
       void countPromise.catch(() => undefined);
     }
@@ -1812,9 +1815,12 @@ export class RentalService {
     } else if (hasCachedExactCount && cachedCount) {
       totalCount = cachedCount.totalCount;
     } else {
-      totalCount = await countPromise!;
+      const exactCount = countPromise
+        ? await countPromise
+        : await prisma.rentalListing.count({ where });
+      totalCount = exactCount;
       publicListingCountCache.set(countCacheKey, {
-        totalCount,
+        totalCount: exactCount,
         savedAt: Date.now(),
         expiresAt: Date.now() + PUBLIC_LISTING_COUNT_CACHE_TTL_MS,
       });
