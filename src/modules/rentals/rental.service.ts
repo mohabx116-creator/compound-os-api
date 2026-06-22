@@ -3916,8 +3916,62 @@ export class RentalService {
     }
   }
 
-  private static warnTenantCreationSkipped(reason: string, context: Record<string, unknown>) {
-    console.warn(`[rentals] Skipped rental tenant creation: ${reason}`, context);
+  private static warnTenantCreationSkipped(
+    reason: string,
+    context: {
+      inquiryId?: string | null;
+      reservationId?: string | null;
+      listingId?: string | null;
+      bedId?: string | null;
+      hasFullName: boolean;
+      hasPhone: boolean;
+      hasCompoundId: boolean;
+    },
+  ) {
+    console.warn('[rentals] Skipped rental tenant creation', {
+      reason,
+      inquiryId: context.inquiryId ?? null,
+      reservationId: context.reservationId ?? null,
+      listingId: context.listingId ?? null,
+      bedId: context.bedId ?? null,
+      hasFullName: context.hasFullName,
+      hasPhone: context.hasPhone,
+      hasCompoundId: context.hasCompoundId,
+    });
+  }
+
+  private static buildSafeAdminNotificationErrorLog(error: unknown) {
+    if (error instanceof AppError) {
+      return {
+        errorName: error.name,
+        errorCode: error.code,
+        statusCode: error.statusCode,
+        isOperational: error.isOperational,
+      };
+    }
+
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      return {
+        errorName: error.name,
+        errorCode: error.code,
+      };
+    }
+
+    if (error instanceof Error) {
+      const maybeErrorWithCode = error as { code?: unknown };
+      const extraCode = typeof maybeErrorWithCode.code === 'string'
+        ? maybeErrorWithCode.code
+        : undefined;
+
+      return {
+        errorName: error.name,
+        ...(extraCode ? { errorCode: extraCode } : {}),
+      };
+    }
+
+    return {
+      errorName: 'UnknownError',
+    };
   }
 
   private static async emitAdminNotificationSafely(
@@ -3931,7 +3985,7 @@ export class RentalService {
         entityType: input.entityType,
         entityId: input.entityId,
         dedupeKey: input.dedupeKey,
-        error,
+        ...this.buildSafeAdminNotificationErrorLog(error),
       });
     }
   }
@@ -3968,6 +4022,7 @@ export class RentalService {
         inquiryId: input.inquiryId,
         reservationId: input.reservationId,
         listingId: input.listingId,
+        bedId: input.bedId,
         hasFullName: Boolean(fullName),
         hasPhone: Boolean(phone),
         hasCompoundId: Boolean(input.compoundId),
