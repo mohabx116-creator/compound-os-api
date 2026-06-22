@@ -15,6 +15,7 @@ import type {
 } from './services.types.js';
 
 const DEFAULT_SERVICES_COMPOUND_CODE = 'black-horse';
+const PUBLIC_SERVICES_HOME_CACHE_TTL_MS = 60_000;
 
 const serviceItemPublicSelect = {
   id: true,
@@ -53,6 +54,24 @@ const serviceItemAdminSelect = {
   ...serviceItemPublicSelect,
 } satisfies Prisma.ServiceItemSelect;
 
+type ServicesHomeItem = Prisma.ServiceItemGetPayload<{
+  select: typeof serviceItemPublicSelect;
+}>;
+
+interface ServicesHomeResponse {
+  facilities: ServicesHomeItem[];
+  technicalServices: ServicesHomeItem[];
+  featured: ServicesHomeItem[];
+}
+
+interface ServicesHomeCacheEntry {
+  data: ServicesHomeResponse;
+  savedAt: number;
+  expiresAt: number;
+}
+
+const publicServicesHomeCache = new Map<string, ServicesHomeCacheEntry>();
+
 function cleanText(value?: string | null) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
@@ -70,6 +89,14 @@ function slugify(value: string) {
 
 export class ServicesService {
   static async getServicesHome(query: { compoundId?: string }) {
+    const cacheKey = this.buildServicesHomeCacheKey(query);
+    const nowMs = Date.now();
+    const cached = publicServicesHomeCache.get(cacheKey);
+
+    if (cached && cached.expiresAt > nowMs) {
+      return cached.data;
+    }
+
     const compound = await this.resolveServicesCompound(query.compoundId);
 
     const items = await prisma.serviceItem.findMany({
@@ -91,11 +118,19 @@ export class ServicesService {
     const technicalServices = homeItems.filter((item) => item.kind === ServiceItemKind.TECHNICAL);
     const featured = homeItems.filter((item) => item.isFeatured === true);
 
-    return {
+    const result: ServicesHomeResponse = {
       facilities,
       technicalServices,
       featured,
     };
+
+    publicServicesHomeCache.set(cacheKey, {
+      data: result,
+      savedAt: Date.now(),
+      expiresAt: Date.now() + PUBLIC_SERVICES_HOME_CACHE_TTL_MS,
+    });
+
+    return result;
   }
 
   static async listPublicItems(query: PublicServiceItemQuery) {
@@ -216,7 +251,7 @@ export class ServicesService {
     const slug = await this.createUniqueItemSlug(compound.id, input.slug ?? input.title);
 
     try {
-      return await prisma.serviceItem.create({
+      const result = await prisma.serviceItem.create({
         data: {
           compoundId: compound.id,
           categoryId: input.categoryId ?? null,
@@ -240,6 +275,8 @@ export class ServicesService {
         },
         select: serviceItemAdminSelect,
       });
+      this.invalidatePublicServicesHomeCache();
+      return result;
     } catch (error) {
       this.handleUniqueConstraint(error, 'Service item');
       throw error;
@@ -265,7 +302,7 @@ export class ServicesService {
       : undefined;
 
     try {
-      return await prisma.serviceItem.update({
+      const result = await prisma.serviceItem.update({
         where: { id },
         data: {
           categoryId: input.categoryId !== undefined ? input.categoryId : undefined,
@@ -289,6 +326,8 @@ export class ServicesService {
         },
         select: serviceItemAdminSelect,
       });
+      this.invalidatePublicServicesHomeCache();
+      return result;
     } catch (error) {
       this.handleUniqueConstraint(error, 'Service item');
       throw error;
@@ -310,7 +349,19 @@ export class ServicesService {
     }
 
     await prisma.serviceItem.delete({ where: { id } });
+    this.invalidatePublicServicesHomeCache();
     return { id };
+  }
+
+  private static invalidatePublicServicesHomeCache() {
+    publicServicesHomeCache.clear();
+  }
+
+  private static buildServicesHomeCacheKey(query: { compoundId?: string }) {
+    const compoundId = query.compoundId?.trim();
+    return compoundId
+      ? `compound:${compoundId}`
+      : `compound:${DEFAULT_SERVICES_COMPOUND_CODE}`;
   }
 
   private static async resolveServicesCompound(
