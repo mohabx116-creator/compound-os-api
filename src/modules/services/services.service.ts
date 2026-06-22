@@ -82,9 +82,14 @@ export class ServicesService {
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
     });
 
-    const facilities = items.filter((item) => item.kind === ServiceItemKind.FACILITY);
-    const technicalServices = items.filter((item) => item.kind === ServiceItemKind.TECHNICAL);
-    const featured = items.filter((item) => item.isFeatured === true);
+    const homeItems = items.map((item) => ({
+      ...item,
+      images: item.images.slice(0, 1),
+    }));
+
+    const facilities = homeItems.filter((item) => item.kind === ServiceItemKind.FACILITY);
+    const technicalServices = homeItems.filter((item) => item.kind === ServiceItemKind.TECHNICAL);
+    const featured = homeItems.filter((item) => item.isFeatured === true);
 
     return {
       facilities,
