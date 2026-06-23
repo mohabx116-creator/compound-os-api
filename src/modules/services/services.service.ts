@@ -2,6 +2,7 @@ import {
   Prisma,
   ServiceItemStatus,
   ServiceItemKind,
+  ServiceItemType,
 } from '@prisma/client';
 import { AppError } from '../../common/errors/AppError.js';
 import { ErrorCodes } from '../../common/errors/error-codes.js';
@@ -22,6 +23,7 @@ const serviceItemPublicSelect = {
   compoundId: true,
   categoryId: true,
   kind: true,
+  serviceType: true,
   title: true,
   slug: true,
   shortDescription: true,
@@ -61,6 +63,7 @@ type ServicesHomeItem = Prisma.ServiceItemGetPayload<{
 interface ServicesHomeResponse {
   facilities: ServicesHomeItem[];
   technicalServices: ServicesHomeItem[];
+  realEstateServices: ServicesHomeItem[];
   featured: ServicesHomeItem[];
 }
 
@@ -115,12 +118,14 @@ export class ServicesService {
     }));
 
     const facilities = homeItems.filter((item) => item.kind === ServiceItemKind.FACILITY);
-    const technicalServices = homeItems.filter((item) => item.kind === ServiceItemKind.TECHNICAL);
+    const technicalServices = homeItems.filter((item) => item.kind === ServiceItemKind.TECHNICAL && item.serviceType === ServiceItemType.TECHNICAL);
+    const realEstateServices = homeItems.filter((item) => item.kind === ServiceItemKind.TECHNICAL && item.serviceType === ServiceItemType.REAL_ESTATE);
     const featured = homeItems.filter((item) => item.isFeatured === true);
 
     const result: ServicesHomeResponse = {
       facilities,
       technicalServices,
+      realEstateServices,
       featured,
     };
 
@@ -201,6 +206,10 @@ export class ServicesService {
       where.kind = query.kind;
     }
 
+    if (query.serviceType) {
+      where.serviceType = query.serviceType;
+    }
+
     if (query.status) {
       where.status = query.status;
     }
@@ -256,6 +265,7 @@ export class ServicesService {
           compoundId: compound.id,
           categoryId: input.categoryId ?? null,
           kind: input.kind,
+          serviceType: input.serviceType ?? ServiceItemType.TECHNICAL,
           title: cleanText(input.title) ?? input.title.trim(),
           slug,
           shortDescription: cleanText(input.shortDescription) ?? null,
@@ -307,6 +317,7 @@ export class ServicesService {
         data: {
           categoryId: input.categoryId !== undefined ? input.categoryId : undefined,
           kind: input.kind,
+          serviceType: input.serviceType,
           title: input.title !== undefined ? cleanText(input.title) ?? input.title.trim() : undefined,
           slug,
           shortDescription: input.shortDescription !== undefined ? cleanText(input.shortDescription) : undefined,
@@ -433,6 +444,10 @@ export class ServicesService {
 
     if (query.kind) {
       where.kind = query.kind;
+    }
+
+    if (query.serviceType) {
+      where.serviceType = query.serviceType;
     }
 
     return where;

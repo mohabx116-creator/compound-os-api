@@ -1,6 +1,7 @@
 import type {
   ServiceItemStatus,
   ServiceItemKind,
+  ServiceItemType,
 } from '@prisma/client';
 
 export interface ServicesCompoundParams {
@@ -13,6 +14,7 @@ export interface PublicServiceItemQuery {
   search?: string;
   compoundId?: string;
   kind?: ServiceItemKind;
+  serviceType?: ServiceItemType;
   featured?: boolean;
 }
 
@@ -23,6 +25,7 @@ export interface AdminServiceItemQuery {
   compoundId?: string;
   categoryId?: string;
   kind?: ServiceItemKind;
+  serviceType?: ServiceItemType;
   status?: ServiceItemStatus;
   isPublic?: boolean;
   isFeatured?: boolean;
@@ -40,6 +43,7 @@ export interface CreateServiceItemInput {
   compoundId?: string;
   categoryId?: string;
   kind: ServiceItemKind;
+  serviceType?: ServiceItemType;
   title: string;
   slug?: string;
   shortDescription?: string;
@@ -61,6 +65,7 @@ export interface CreateServiceItemInput {
 export interface UpdateServiceItemInput {
   categoryId?: string;
   kind?: ServiceItemKind;
+  serviceType?: ServiceItemType;
   title?: string;
   slug?: string;
   shortDescription?: string;

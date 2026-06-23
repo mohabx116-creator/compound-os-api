@@ -21,6 +21,7 @@ const optionalBooleanFlag = z.preprocess((value) => {
 
 const serviceItemStatusSchema = z.enum(['ACTIVE', 'INACTIVE']);
 const serviceItemKindSchema = z.enum(['FACILITY', 'TECHNICAL']);
+const serviceItemTypeSchema = z.enum(['TECHNICAL', 'REAL_ESTATE']);
 
 const slugSchema = z
   .string()
@@ -39,6 +40,7 @@ export const publicServiceItemQuerySchema = z.object({
   search: optionalSearch(),
   compoundId: z.string().uuid('Invalid compound id').optional(),
   kind: serviceItemKindSchema.optional(),
+  serviceType: serviceItemTypeSchema.optional(),
   featured: optionalBooleanFlag,
 });
 
@@ -49,6 +51,7 @@ export const adminServiceItemQuerySchema = z.object({
   compoundId: z.string().uuid('Invalid compound id').optional(),
   categoryId: z.string().uuid('Invalid category id').optional(),
   kind: serviceItemKindSchema.optional(),
+  serviceType: serviceItemTypeSchema.optional(),
   status: serviceItemStatusSchema.optional(),
   isPublic: optionalBooleanFlag,
   isFeatured: optionalBooleanFlag,
@@ -67,6 +70,7 @@ export const createServiceItemSchema = z
     compoundId: z.string().uuid('Invalid compound id').optional(),
     categoryId: z.string().uuid('Invalid category id').optional(),
     kind: serviceItemKindSchema,
+    serviceType: serviceItemTypeSchema.optional(),
     title: z.string().trim().min(2, 'Service title is required').max(150),
     slug: slugSchema.optional(),
     shortDescription: optionalText(1000),
@@ -95,6 +99,7 @@ export const updateServiceItemSchema = z
   .object({
     categoryId: z.string().uuid('Invalid category id').optional(),
     kind: serviceItemKindSchema.optional(),
+    serviceType: serviceItemTypeSchema.optional(),
     title: z.string().trim().min(2, 'Service title is required').max(150).optional(),
     slug: slugSchema.optional(),
     shortDescription: optionalText(1000),

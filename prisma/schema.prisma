@@ -654,6 +654,11 @@ enum ServiceItemKind {
   TECHNICAL
 }
 
+enum ServiceItemType {
+  TECHNICAL
+  REAL_ESTATE
+}
+
 model ServiceCategory {
   id         String   @id @default(uuid())
   compoundId String   @map("compound_id")
@@ -712,6 +717,7 @@ model ServiceItem {
   categoryId       String?           @map("category_id")
   category         ServiceCategory?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   kind             ServiceItemKind   @default(TECHNICAL)
+  serviceType      ServiceItemType   @default(TECHNICAL) @map("service_type")
   title            String
   slug             String
   shortDescription String?           @map("short_description")
@@ -734,6 +740,7 @@ model ServiceItem {
   @@unique([compoundId, slug])
   @@index([compoundId])
   @@index([categoryId])
+  @@index([serviceType])
   @@index([status])
   @@index([isPublic])
   @@index([isFeatured])
