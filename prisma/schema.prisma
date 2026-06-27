@@ -863,6 +863,27 @@ enum RealEstateFinishing {
   OLD_FINISH
 }
 
+enum RealEstateFinishingStatus {
+  WITHOUT_FINISHING
+  FINISHED
+  FINISHED_FURNISHED
+}
+
+enum RealEstatePhase {
+  PHASE_ONE
+  PHASE_TWO
+}
+
+enum RealEstateElectricityStatus {
+  ELECTRICITY_METER
+  ELECTRICITY_PRACTICE
+}
+
+enum RealEstateOwnershipProofType {
+  CONTRACT
+  POWER_OF_ATTORNEY
+}
+
 enum RealEstateFurnishingStatus {
   FURNISHED
   UNFURNISHED
@@ -901,6 +922,7 @@ model RealEstateListing {
   areaSqm     Decimal          @map("area_sqm") @db.Decimal(10, 2)
   description String
   features    Json?
+  amenities   Json?
   isFeatured  Boolean          @default(false) @map("is_featured")
   sortOrder   Int              @default(0) @map("sort_order")
   publishedAt DateTime?        @map("published_at")
@@ -914,18 +936,25 @@ model RealEstateListing {
   // Apartment/Unit optional fields
   bedrooms         Int?
   bathrooms        Int?
-  floor            Int?
+  floor            String?
   balconies        Int?
   receptionRooms   Int?                        @map("reception_rooms")
   buildingAge      Int?                        @map("building_age")
   buildingNumber   String?                     @map("building_number")
   apartmentNumber  String?                     @map("apartment_number")
   finishingType    RealEstateFinishing?        @map("finishing_type")
+  finishingStatus  RealEstateFinishingStatus?   @map("finishing_status")
   furnishingStatus RealEstateFurnishingStatus? @map("furnishing_status")
   deliveryStatus   String?                     @map("delivery_status")
   hasElevator      Boolean?                    @map("has_elevator")
   hasParking       Boolean?                    @map("has_parking")
   view             String?
+  phase            RealEstatePhase?
+  electricityStatus RealEstateElectricityStatus? @map("electricity_status")
+  ownershipProofType RealEstateOwnershipProofType? @map("ownership_proof_type")
+  hasInstallments  Boolean?                    @map("has_installments")
+  hasDeposit       Boolean?                    @map("has_deposit")
+  hasFinalContract Boolean?                    @map("has_final_contract")
 
   // Land optional fields
   pricePerMeter      Decimal? @map("price_per_meter") @db.Decimal(12, 2)
@@ -983,20 +1012,28 @@ model RealEstateOwnerSubmission {
   areaSqm           Decimal        @map("area_sqm") @db.Decimal(10, 2)
   description       String
   features          Json?
+  amenities         Json?
 
   // Optional fields mixed
   bedrooms           Int?
   bathrooms          Int?
-  floor              Int?
+  floor              String?
   balconies          Int?
   receptionRooms     Int?                        @map("reception_rooms")
   buildingAge        Int?                        @map("building_age")
   buildingNumber     String?                     @map("building_number")
   apartmentNumber    String?                     @map("apartment_number")
   finishingType      RealEstateFinishing?        @map("finishing_type")
+  finishingStatus    RealEstateFinishingStatus?  @map("finishing_status")
   furnishingStatus   RealEstateFurnishingStatus? @map("furnishing_status")
   hasElevator        Boolean?                    @map("has_elevator")
   hasParking         Boolean?                    @map("has_parking")
+  phase              RealEstatePhase?
+  electricityStatus  RealEstateElectricityStatus? @map("electricity_status")
+  ownershipProofType RealEstateOwnershipProofType? @map("ownership_proof_type")
+  hasInstallments    Boolean?                    @map("has_installments")
+  hasDeposit         Boolean?                    @map("has_deposit")
+  hasFinalContract   Boolean?                    @map("has_final_contract")
   pricePerMeter      Decimal?                    @map("price_per_meter") @db.Decimal(12, 2)
   frontage           Decimal?                    @db.Decimal(10, 2)
   depth              Decimal?                    @db.Decimal(10, 2)

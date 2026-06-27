@@ -3,6 +3,10 @@ import {
   RealEstateType,
   RealEstateStatus,
   RealEstateFinishing,
+  RealEstateFinishingStatus,
+  RealEstatePhase,
+  RealEstateElectricityStatus,
+  RealEstateOwnershipProofType,
   RealEstateInquiryType,
   RealEstateInquiryStatus,
   RealEstateSubmissionStatus,
@@ -13,10 +17,56 @@ import {
 const realEstateTypeEnum = z.nativeEnum(RealEstateType);
 const realEstateStatusEnum = z.nativeEnum(RealEstateStatus);
 const realEstateFinishingEnum = z.nativeEnum(RealEstateFinishing);
+const realEstateFinishingStatusEnum = z.nativeEnum(RealEstateFinishingStatus);
+const realEstatePhaseEnum = z.nativeEnum(RealEstatePhase);
+const realEstateElectricityStatusEnum = z.nativeEnum(RealEstateElectricityStatus);
+const realEstateOwnershipProofTypeEnum = z.nativeEnum(RealEstateOwnershipProofType);
 const realEstateFurnishingStatusEnum = z.nativeEnum(RealEstateFurnishingStatus);
 const realEstateInquiryTypeEnum = z.nativeEnum(RealEstateInquiryType);
 const realEstateInquiryStatusEnum = z.nativeEnum(RealEstateInquiryStatus);
 const realEstateSubmissionStatusEnum = z.nativeEnum(RealEstateSubmissionStatus);
+const realEstateFloorValues = [
+  'BASEMENT',
+  'GROUND',
+  '1',
+  '2',
+  '3',
+  '4',
+  '5',
+  '6',
+  '7',
+  '8',
+  '9',
+  '10',
+  '11',
+  '12',
+  '13',
+  '14',
+  '15',
+  '16',
+  '17',
+  '18',
+  '19',
+  '20',
+  'ROOF',
+] as const;
+const realEstateFloorEnum = z.enum(realEstateFloorValues);
+const realEstateAmenityValues = [
+  'ELEVATOR',
+  'GARAGE',
+  'SECURITY',
+  'SURVEILLANCE_CAMERAS',
+  'INTERCOM',
+  'NATURAL_GAS',
+  'WATER_METER',
+  'GAS_METER',
+  'AIR_CONDITIONERS',
+  'KITCHEN',
+  'ELECTRICAL_APPLIANCES',
+  'BALCONY_OR_TERRACE',
+  'LAND_SHARE',
+] as const;
+const realEstateAmenityEnum = z.enum(realEstateAmenityValues);
 
 // Images Validation
 export const ImageSchema = z.object({
@@ -48,20 +98,28 @@ export const CreateOwnerSubmissionSchema = z.object({
   areaSqm: z.number().positive(),
   description: z.string().min(10),
   features: z.array(z.string()).optional(),
+  amenities: z.array(realEstateAmenityEnum).optional(),
   
   // Apartment Fields
   bedrooms: z.number().int().nonnegative().optional(),
   bathrooms: z.number().int().nonnegative().optional(),
-  floor: z.number().int().optional(),
+  floor: realEstateFloorEnum.optional(),
   balconies: z.number().int().nonnegative().optional(),
   receptionRooms: z.number().int().nonnegative().optional(),
   buildingAge: z.number().int().nonnegative().optional(),
   buildingNumber: z.string().optional(),
   apartmentNumber: z.string().optional(),
   finishingType: realEstateFinishingEnum.optional(),
+  finishingStatus: realEstateFinishingStatusEnum.optional(),
   furnishingStatus: realEstateFurnishingStatusEnum.optional(),
   hasElevator: z.boolean().optional(),
   hasParking: z.boolean().optional(),
+  phase: realEstatePhaseEnum.optional(),
+  electricityStatus: realEstateElectricityStatusEnum.optional(),
+  ownershipProofType: realEstateOwnershipProofTypeEnum.optional(),
+  hasInstallments: z.boolean().optional(),
+  hasDeposit: z.boolean().optional(),
+  hasFinalContract: z.boolean().optional(),
   
   // Land Fields
   pricePerMeter: z.number().positive().optional(),
@@ -88,6 +146,7 @@ export const AdminCreateRealEstateListingSchema = z.object({
   areaSqm: z.number().positive(),
   description: z.string().min(10),
   features: z.array(z.string()).optional(),
+  amenities: z.array(realEstateAmenityEnum).optional(),
   isFeatured: z.boolean().default(false),
   sortOrder: z.number().default(0),
   publishedAt: z.string().datetime().optional().nullable(),
@@ -100,18 +159,25 @@ export const AdminCreateRealEstateListingSchema = z.object({
   
   bedrooms: z.number().int().nonnegative().optional(),
   bathrooms: z.number().int().nonnegative().optional(),
-  floor: z.number().int().optional(),
+  floor: realEstateFloorEnum.optional(),
   balconies: z.number().int().nonnegative().optional(),
   receptionRooms: z.number().int().nonnegative().optional(),
   buildingAge: z.number().int().nonnegative().optional(),
   buildingNumber: z.string().optional(),
   apartmentNumber: z.string().optional(),
   finishingType: realEstateFinishingEnum.optional(),
+  finishingStatus: realEstateFinishingStatusEnum.optional(),
   furnishingStatus: realEstateFurnishingStatusEnum.optional(),
   deliveryStatus: z.string().optional(),
   hasElevator: z.boolean().optional(),
   hasParking: z.boolean().optional(),
   view: z.string().optional(),
+  phase: realEstatePhaseEnum.optional(),
+  electricityStatus: realEstateElectricityStatusEnum.optional(),
+  ownershipProofType: realEstateOwnershipProofTypeEnum.optional(),
+  hasInstallments: z.boolean().optional(),
+  hasDeposit: z.boolean().optional(),
+  hasFinalContract: z.boolean().optional(),
   
   pricePerMeter: z.number().positive().optional(),
   frontage: z.number().positive().optional(),
