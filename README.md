@@ -1,675 +1,123 @@
 # Compound OS API — Residential Management & Rental Marketplace Backend
 
-Production-oriented Node.js/TypeScript backend for compound management, resident services, admin workflows, and rental reservation operations.
+Production-oriented Node.js/TypeScript backend for residential compound management, resident services, admin operations, and rental reservation workflows.
 
-This is the professional, production-oriented backend API foundation for **Compound OS**, a modern residential compound management system.
+## Key Backend Capabilities
+- Node.js, Express, and TypeScript.
+- PostgreSQL via Supabase and Prisma ORM.
+- Zod validation for request payloads and environment configuration.
+- JWT authentication with resident login, admin login, and protected routes.
+- Role-aware admin authorization for internal operations.
+- Modular domain-based architecture.
+- Centralized error handling and API response utilities.
+- Pagination support where implemented across list endpoints.
+- Compound, unit, resident, and complaint APIs.
+- Rental listings, inquiries, reservation workflow, and admin operations.
+- Transaction-based protection against conflicting bed reservations.
+- Cloudinary upload configuration for supported image workflows.
+- Render deployment guidance for production hosting.
 
----
+## Connected Applications
+- Resident platform: https://compound-os-web.vercel.app/
+- Services platform: https://compound-os-services-web.vercel.app/
 
-## Deployment & Hosting Strategy
-To ensure maximum scalability, performance, and modern continuous integration:
-- **Backend Service**: Hosted on **Render** (Web Service).
-- **Database Layer**: Hosted on **Supabase** (Serverless PostgreSQL Database).
-- **Frontend Layer (Later)**: Hosted on **Vercel** (Static/Serverless SPA or Next.js app).
+These frontend applications are integrated with the API.
 
----
+## Highlighted Business Workflow: Bed Reservations
+Rental reservations are handled at the bed level rather than only at the listing level. The workflow tracks bed availability, reservation states, admin confirmation and cancellation, and listing visibility so the public catalog reflects current occupancy.
 
-## Tech Stack
-- **Node.js** & **Express.js** (modular monolith architecture)
-- **TypeScript** (strict types, ES2022 output, NodeNext module resolution)
-- **Supabase PostgreSQL** & **Prisma ORM** (Prisma-first schema)
-- **Zod** (environment & payload validation)
-- **bcrypt** (password hashing utilities prepared for the auth phase)
+To reduce conflicting reservations when concurrent requests target the same available bed, the backend uses database transactions and row-level locking in the reservation flow, including `FOR UPDATE` and `FOR UPDATE SKIP LOCKED` where implemented. This protects the selection of an available bed without claiming distributed locking or queue-based coordination.
 
----
+## Authentication
+Authentication is implemented and exposed through the API:
+- `POST /api/v1/auth/resident/login`
+- `POST /api/v1/auth/admin/login`
+- `GET /api/v1/auth/me`
+- `GET /api/v1/auth/status`
 
-## Folder Structure
+Protected route groups include:
+- `/api/v1/compounds`
+- `/api/v1/units`
+- `/api/v1/residents`
+- `/api/v1/complaints`
+- `/api/v1/admin/*`
 
-```
-compound-os-api/
-  ├── prisma/
-  │   └── schema.prisma         # Single source of truth database schema
-  ├── src/
-  │   ├── app.ts                # Express application configuration
-  │   ├── server.ts             # HTTP Server entrypoint & graceful shutdowns
-  │   ├── config/
-  │   │   ├── env.ts            # Environment variables parsing and Zod validation
-  │   │   └── prisma.ts         # Prisma Client development/production singleton
-  │   ├── common/
-  │   │   ├── errors/           # Custom AppError structures and error-codes
-  │   │   ├── middlewares/      # Error, Route-Not-Found, and Zod validator middlewares
-  │   │   ├── utils/            # Async handler wrapper, API responses, and pagination helpers
-  │   │   └── types/            # Global Express Request expansions
-  │   ├── modules/              # Domain-specific modules (compounds, units, residents, complaints)
-  │   └── routes/               # Modular Express API root routes
-  ├── .env
-  ├── .env.example
-  ├── .gitignore
-  ├── package.json
-  ├── tsconfig.json
-  └── README.md
-```
-
----
-
-## Local Setup & Development Instructions
-
-### 1. Install Dependencies
+## Local Setup
+### Install Dependencies
 ```bash
 npm install
 ```
 
-### 2. Configure Environment Variables
-Copy the template `.env.example` file to `.env`:
+### Configure Environment Variables
+Copy the example file to `.env`:
 ```bash
 copy .env.example .env
 ```
-*(On Unix/macOS systems, use `cp .env.example .env`)*
+On macOS/Linux, use `cp .env.example .env`.
 
-Open the `.env` file and configure your `DATABASE_URL` using the connection strings copied from your **Supabase Dashboard > Connect** panel.
+Set the required values from your Supabase and deployment environment:
+- `DATABASE_URL`
+- `DIRECT_URL`
+- `PASSWORD_SALT_ROUNDS`
+- `JWT_SECRET`
+- `JWT_EXPIRES_IN`
+- `CORS_ORIGINS`
+- Optional Cloudinary values when image upload signatures are needed
 
-Auth phases define these variables:
+Do not commit real secrets or production credentials.
 
-```bash
-PASSWORD_SALT_ROUNDS=12
-JWT_SECRET="CHANGE_ME_TO_A_LONG_RANDOM_SECRET"
-JWT_EXPIRES_IN="7d"
-CORS_ORIGINS="http://localhost:5173,https://compound-os-web.vercel.app,https://compound-os-admin.vercel.app"
-```
-
-`JWT_SECRET` must be a long random secret before login/JWT issuing can succeed. Do not use the placeholder value in production.
-`CORS_ORIGINS` is a comma-separated allowlist. In development, localhost Vite/preview origins are also allowed automatically. In production, set the exact public web and admin dashboard origins, for example `https://sebahicompound.com`, `https://www.sebahicompound.com`, and `https://admin.sebahicompound.com`.
-
----
-
-## Supabase Connection Guidelines
-To avoid common connection limits or pooler conflicts, copy the exact Prisma-compatible connection strings directly from your **Supabase Dashboard > Connect** panel and apply these rules:
-
-### 1. Local Migrations (`prisma migrate dev`)
-* Use a direct database connection or a **Supavisor Session Mode** connection string that fully supports DDL migration operations.
-* **Network compatibility**: Supabase direct database connections may require IPv6 support depending on your project and network. If direct connection fails, use **Supavisor Session Mode** or the migration-compatible connection option recommended in your Supabase Dashboard.
-
-### 2. Production Deployments (`prisma migrate deploy` on Render)
-* Set a connection string during the automated build pipeline that supports running Prisma DDL migrations.
-
-### 3. Serverless Runtime (`npm run start` / `npm run dev`)
-* Set your runtime database url to the Prisma/server runtime connection string recommended in the Supabase Connect panel (which leverages connection poolers to prevent exhaustion of connection slots).
-
----
-
-## First Database Migration (Supabase)
-To establish database schemas on Supabase:
-1. Temporarily set your `.env` file's `DATABASE_URL` to your migration-compatible connection string.
-2. Run the Prisma migration CLI:
-   ```bash
-   npm run prisma:migrate -- --name init
-   ```
-3. Once the migration has completed, revert your `.env` `DATABASE_URL` to the pooler/server runtime connection string.
-
-### Start the Development Server
-Launch the local server with hot-reloads enabled:
+### Run the API Locally
 ```bash
 npm run dev
 ```
 
----
-
-## Render Deployment Instructions
-
-When deploying the **Compound OS API** backend to Render as a Web Service:
-
-### 1. Connect Github Repository
-Log into Render and create a new **Web Service**, connecting the Github repository where the project resides.
-
-### 2. Configure Build & Start Commands
-Under the **Settings** panel, configure the build and run pipelines:
-- **Runtime**: `Node`
-- **Build Command**: `npm install && npm run build && npm run prisma:deploy`
-- **Start Command**: `npm run start`
-
-*(The build command will download packages, generate Prisma typings, build TypeScript files into `dist/`, and run `prisma migrate deploy` to safely apply pending database migrations automatically).*
-
-### 3. Setup Environment Variables
-Under the **Environment** tab, add the following variables:
-- `NODE_ENV`: `production`
-- `PORT`: `10000` (Render allocates ports automatically, but setting this aligns validations)
-- `CORS_ORIGINS`: comma-separated frontend/admin allowed origins
-- `DATABASE_URL`: Set this to the Supabase connection string recommended for **Prisma/server runtime** from the Supabase Connect panel.
-- `DIRECT_URL`: Set this to the Supabase direct/session connection string used by Prisma migrations.
-- `JWT_SECRET`: Set this to a long random production secret. Do not use placeholder values.
-- `JWT_EXPIRES_IN`: `7d`
-- `CORS_ORIGINS`: Comma-separated browser origins allowed to call the API.
-
-Current production CORS origins before custom subdomains:
-
-```txt
-https://dalilsubhi.com,https://www.dalilsubhi.com,https://dalilsubhi-landing-web.vercel.app,https://sebahi-rental-web.vercel.app,https://compound-os-web.vercel.app,https://compound-os-admin.vercel.app
-```
-
-Final production CORS origins after custom subdomains:
-
-```txt
-https://dalilsubhi.com,https://www.dalilsubhi.com,https://dalilsubhi-landing-web.vercel.app,https://sebahi-rental-web.vercel.app,https://compound-os-web.vercel.app,https://compound-os-admin.vercel.app,https://rentals.dalilsubhi.com,https://app.dalilsubhi.com,https://admin.dalilsubhi.com
-```
-
-Owner submission image uploads require Cloudinary:
-
+### Prisma Commands
+Generate the Prisma client:
 ```bash
-CLOUDINARY_CLOUD_NAME=""
-CLOUDINARY_API_KEY=""
-CLOUDINARY_API_SECRET=""
-CLOUDINARY_OWNER_SUBMISSIONS_FOLDER="dalilsubhi/owner-submissions"
-CLOUDINARY_LISTINGS_FOLDER="dalilsubhi/listings"
-```
-
-Do not commit real environment values. If Cloudinary credentials are missing, owner or admin listing upload signature requests return a controlled `CLOUDINARY_NOT_CONFIGURED` error.
-
----
-
-## Rental Marketplace Foundation
-
-> ?? **?????? ??? ??????? ????????:** [\docs/RENTAL_BED_FLOW_RELEASE_NOTES.md\](./docs/RENTAL_BED_FLOW_RELEASE_NOTES.md)
-
-The Rental Marketplace module adds a production-oriented backend foundation for listing rental units inside Compound OS. It supports public listing discovery, WhatsApp-based bed reservation requests, admin listing management, historical Paymob webhook reconciliation, reservation conflict protection, and internal ledger entries for confirmed rentals.
-
-Business defaults:
-- Currency: `EGP`
-- Owner listing publishing fee: `500 EGP`
-- Tenant contact unlock fee: legacy only; new rental contact unlock payments are disabled.
-- Reservation hold fee: legacy only; new rental bed reservations do not create payment intents.
-- Reservation hold duration after paid webhook: legacy only.
-- Reservation payment lock window: legacy only.
-- Platform commission on confirmed rental: `10%`
-- Listing publish duration: `30 days`
-- Payment provider: legacy rental records may reference `PAYMOB`; new rental reservation flow uses WhatsApp and does not start Paymob.
-
-### Legacy Rental Payment Rules
-
-Rental payment initiation is disabled. Historical payment success is still webhook-based for existing records, and the backend must never trust a frontend callback, redirect, or local UI state as payment confirmation.
-
-Public contact access no longer returns owner phone or email through rental payment state. Bed reservations use a transaction and bed availability lock so a second tenant cannot reserve the same available bed.
-
-### Rental Endpoints
-
-Base path: `/api/v1/rentals`
-
-Public:
-- `GET /listings`
-- `GET /listings/:slug`
-- `POST /listings/:id/inquiries`
-- `POST /listings/:id/contact-unlock` (legacy route; returns disabled for new requests)
-- `GET /listings/:id/contact-access?tenantPhone=...` (legacy route; does not expose owner contact for new public flow)
-- `POST /listings/:id/reservations` (WhatsApp bed reservation flow; no payment intent)
-- `GET /reservations/:id`
-- `POST /payments/paymob/webhook`
-
-Admin endpoints require `Authorization: Bearer ACCESS_TOKEN` for an admin role (`ADMIN`, `MANAGER`, `ACCOUNTANT`, `SECURITY`, or `MAINTENANCE`):
-- `GET /admin/owners`
-- `GET /admin/owners/:id`
-- `POST /admin/owners`
-- `PATCH /admin/owners/:id`
-- `PATCH /admin/owners/:id/activate`
-- `PATCH /admin/owners/:id/deactivate`
-- `GET /admin/listings`
-- `GET /admin/listings/:id`
-- `POST /admin/listings`
-- `PATCH /admin/listings/:id`
-- `PATCH /admin/listings/:id/publish`
-- `PATCH /admin/listings/:id/unpublish`
-- `GET /admin/inquiries`
-- `GET /admin/inquiries/:id`
-- `PATCH /admin/inquiries/:id/status`
-- `PATCH /admin/reservations/:id/confirm`
-- `PATCH /admin/reservations/:id/cancel`
-- `POST /admin/maintenance/expire-reservations`
-
-Unauthenticated admin requests return `401`. Authenticated non-admin requests return `403`.
-
-Owner deactivation uses `status=SUSPENDED`; `RentalOwnerStatus` does not include an `INACTIVE` enum value.
-
-### Rental Inquiry / Viewing Requests
-
-Visitors can submit a non-payment inquiry or viewing request without unlocking owner contact:
-
-```http
-POST /api/v1/rentals/listings/:id/inquiries
-Content-Type: application/json
-
-{
-  "tenantName": "Ahmed Test",
-  "tenantPhone": "+201555555555",
-  "tenantEmail": "ahmed.test@example.com",
-  "message": "أرغب في معاينة الشقة المتاحة في كمبوند السبحي.",
-  "inquiryType": "VIEWING_REQUEST"
-}
-```
-
-`inquiryType=VIEWING_REQUEST` stores `status=VIEWING_REQUESTED`; `GENERAL` or an omitted type stores `status=NEW`. The public response returns only the inquiry `id` and `status`. It does not return owner contact, create a payment, or mark contact access as unlocked.
-
-Admin review endpoints:
-
-```http
-GET /api/v1/rentals/admin/inquiries?page=1&limit=10&status=NEW
-Authorization: Bearer ADMIN_ACCESS_TOKEN
-
-GET /api/v1/rentals/admin/inquiries/:id
-Authorization: Bearer ADMIN_ACCESS_TOKEN
-
-PATCH /api/v1/rentals/admin/inquiries/:id/status
-Authorization: Bearer ADMIN_ACCESS_TOKEN
-Content-Type: application/json
-
-{
-  "status": "CLOSED"
-}
-```
-
-Allowed inquiry statuses are the existing `RentalInquiryStatus` values: `NEW`, `CONTACT_UNLOCKED`, `VIEWING_REQUESTED`, `CLOSED`, and `CANCELLED`.
-
-### Legacy Paymob Environment
-
-These values are retained only for historical rental webhook verification or older environments. Do not enable new rental Paymob initiation paths.
-
-```bash
-PAYMOB_API_KEY=""
-PAYMOB_INTEGRATION_ID_CARD=""
-PAYMOB_IFRAME_ID=""
-PAYMOB_HMAC_SECRET=""
-PAYMOB_CALLBACK_URL=""
-PAYMOB_WEBHOOK_SECRET=""
-PUBLIC_RENTAL_BASE_URL=""
-```
-
-Do not commit real Paymob secrets. New rental payment-initiation endpoints are disabled and should not create provider intents.
-
-### Rental Quality Checks
-
-```bash
-npx prisma validate
 npm run prisma:generate
-npm run type-check
-npm run build
 ```
 
-Only run migrations when a migration-safe database URL is configured:
-
+Create a local migration:
 ```bash
-npm run prisma:migrate -- --name add_rental_marketplace_core
+npm run prisma:migrate -- --name init
 ```
 
-## Auth Foundation Status
-
-The backend issues JWT access tokens and protects internal route groups while keeping public health, auth, and rental marketplace discovery routes open.
-
-Current auth status:
-- Resident login is available at `POST /api/v1/auth/resident/login`.
-- Admin login is available at `POST /api/v1/auth/admin/login`.
-- Authenticated user lookup is available at `GET /api/v1/auth/me`.
-- Rental public listing, inquiry, contact-access, reservation status, and legacy Paymob webhook routes remain public by design. Rental payment-initiation routes are disabled and must not create new provider intents.
-- Rental `/admin/*` routes require an authenticated admin role.
-- `/compounds/*`, `/units/*`, `/residents/*`, and `/complaints/*` require an authenticated JWT.
-
-Auth module readiness can be checked with:
-
-```http
-GET /api/v1/auth/status
+Validate or deploy existing migrations:
+```bash
+npm run prisma:deploy
 ```
 
-Expected response:
+## Deployment Notes for Render
+Recommended Render Web Service settings:
+- Build command: `npm install && npm run build && npm run prisma:deploy`
+- Start command: `npm run start`
+- Runtime: Node
 
-```json
-{
-  "success": true,
-  "message": "Auth module is ready",
-  "data": {
-    "authEnabled": true,
-    "phase": "login-jwt",
-    "residentLogin": true,
-    "adminLogin": true
-  }
-}
+Use a Prisma-compatible database connection for migrations and a production-safe runtime connection for the app process. Set the exact browser origins that should call the API in `CORS_ORIGINS`.
+
+Cloudinary upload signatures are available when the Cloudinary environment variables are configured. If they are missing, the API returns a controlled configuration error instead of exposing credentials or failing silently.
+
+## Project Structure
+```text
+compound-os-api/
+  prisma/
+  src/
+    app.ts
+    server.ts
+    common/
+    config/
+    modules/
+    routes/
+  .env.example
+  package.json
+  tsconfig.json
+  README.md
 ```
 
-### Resident Login
-
-Residents type only phone and password in the UI. The resident app should send `compoundCode` internally after the user selects a compound logo/button.
-
-```http
-POST /api/v1/auth/resident/login
-Content-Type: application/json
-
-{
-  "compoundCode": "black-horse",
-  "phone": "+201222222222",
-  "password": "resident-password"
-}
-```
-
-Successful login returns a safe user object, an access token, and the token expiry. Password hashes are never returned.
-
-### Admin Login
-
-Admin login uses email and password in Phase A2:
-
-```http
-POST /api/v1/auth/admin/login
-Content-Type: application/json
-
-{
-  "email": "admin@example.com",
-  "password": "admin-password"
-}
-```
-
-Only `ADMIN`, `MANAGER`, `ACCOUNTANT`, `SECURITY`, and `MAINTENANCE` roles can use admin login. `RESIDENT` users cannot pass admin login.
-
-### Authenticated User
-
-```http
-GET /api/v1/auth/me
-Authorization: Bearer ACCESS_TOKEN
-```
-
-### Test Password Setup
-
-Current live residents may not have `password_hash` populated yet. A2 does not seed users or mutate live passwords automatically.
-
-For a controlled manual test, generate a bcrypt hash using the backend password utility or a one-off local Node/Prisma script, then intentionally update one known test resident's `password_hash`. Do not commit real passwords or hashes, and do not log secrets. Also make sure the selected compound has a tenant `code`, such as `black-horse`.
-
-### Test Health Endpoint
-Send a `GET` request to:
-`http://localhost:4000/api/v1/health` (or your Render Web Service URL)
-
-#### Expected Success Response:
-```json
-{
-  "success": true,
-  "message": "API is healthy",
-  "data": {
-    "service": "compound-os-api",
-    "environment": "development",
-    "timestamp": "ISO_TIMESTAMP"
-  }
-}
-```
-
----
-
-## Compounds API
-
-Base path: `/api/v1/compounds`
-
-### Tenant Code Foundation
-
-Phase A1B adds an optional compound `code` field as a technical tenant slug.
-
-Rules:
-- `code` is optional in A1B so existing live compounds are not forced to change immediately.
-- `code` must be slug-safe when provided: lowercase letters, numbers, and hyphens only.
-- Examples: `black-horse`, `compound-os-demo`.
-- `code` is unique across compounds.
-- Resident phone numbers remain unique per compound, not globally unique.
-
-Future resident login UX:
-- The resident will select/tap a compound logo or compound button in the app.
-- The frontend will send the selected compound's `compoundCode` internally.
-- The resident will only type phone and password.
-- Future login payload shape will use hidden tenant context:
-
-```json
-{
-  "compoundCode": "black-horse",
-  "phone": "+201222222222",
-  "password": "..."
-}
-```
-
-A1B does not implement login, JWT issuing, protected routes, or frontend integration. Production should restrict changing `code` after real users depend on it.
-
-### List Compounds
-```http
-GET /api/v1/compounds?page=1&limit=10&search=demo&isActive=true
-```
-
-Returns a paginated list of active compounds by default. Pass `isActive=false` to list inactive compounds.
-
-### Get Compound
-```http
-GET /api/v1/compounds/{id}
-```
-
-Returns one compound by UUID with related counts for units, residents, and complaints, or `404` when it does not exist.
-
-### Create Compound
-```http
-POST /api/v1/compounds
-Content-Type: application/json
-
-{
-  "name": "Demo Compound",
-  "code": "compound-os-demo",
-  "adminEmail": "admin@example.com",
-  "address": "Cairo",
-  "phone": "01000000000"
-}
-```
-
-### Update Compound
-```http
-PATCH /api/v1/compounds/{id}
-Content-Type: application/json
-
-{
-  "name": "Updated Compound"
-}
-```
-
-### Delete Compound
-```http
-DELETE /api/v1/compounds/{id}
-```
-
-The delete endpoint safely deactivates a compound using `isActive=false`. It returns `409` if the compound has related units, residents, or complaints. Repeating delete for an already inactive compound returns `200` with a clear "already inactive" message.
-
----
-
-## Units API
-
-Base path: `/api/v1/units`
-
-### List Units
-```http
-GET /api/v1/units?page=1&limit=10&search=A&compoundId={compoundId}&status=VACANT&unitType=APARTMENT
-```
-
-Returns a paginated list of units with basic compound information.
-
-### Get Unit
-```http
-GET /api/v1/units/{id}
-```
-
-Returns one unit by UUID with basic compound information and related counts for residents and complaints.
-
-### Create Unit
-```http
-POST /api/v1/units
-Content-Type: application/json
-
-{
-  "compoundId": "ca155709-2f8c-47ab-8e91-6fa0504cf435",
-  "unitNumber": "A-101",
-  "unitType": "APARTMENT",
-  "floor": 1,
-  "areaSqm": 120.5,
-  "status": "VACANT"
-}
-```
-
-Returns `404` if the compound does not exist and `409` if the unit number already exists in the same compound.
-
-### Update Unit
-```http
-PATCH /api/v1/units/{id}
-Content-Type: application/json
-
-{
-  "status": "MAINTENANCE"
-}
-```
-
-### Delete Unit
-```http
-DELETE /api/v1/units/{id}
-```
-
-Deletes a unit only when it has no related residents or complaints. Returns `409` if deleting the unit would remove linked business data.
-
----
-
-## Residents API
-
-Base path: `/api/v1/residents`
-
-### List Residents
-```http
-GET /api/v1/residents?page=1&limit=10&search=Ahmed&compoundId={compoundId}&unitId={unitId}&status=ACTIVE&role=RESIDENT
-```
-
-Returns a paginated list of residents with basic compound and unit information. Password hashes are never returned.
-
-### Get Resident
-```http
-GET /api/v1/residents/{id}
-```
-
-Returns one resident by UUID with basic compound and unit information plus a complaints count.
-
-### Create Resident
-```http
-POST /api/v1/residents
-Content-Type: application/json
-
-{
-  "compoundId": "ca155709-2f8c-47ab-8e91-6fa0504cf435",
-  "unitId": "f863d57c-e951-4a4d-bced-ce2bc2647d13",
-  "fullName": "Ahmed Test Resident",
-  "phone": "+201222222222",
-  "email": "resident.test@compoundos.com",
-  "role": "RESIDENT",
-  "status": "ACTIVE"
-}
-```
-
-Returns `404` if the compound or unit does not exist, `409` if the unit belongs to another compound, and `409` if the phone already exists in the same compound.
-
-### Update Resident
-```http
-PATCH /api/v1/residents/{id}
-Content-Type: application/json
-
-{
-  "status": "INACTIVE"
-}
-```
-
-Use `"unitId": null` to unlink a resident from a unit and `"email": null` to clear an email.
-
-### Delete Resident
-```http
-DELETE /api/v1/residents/{id}
-```
-
-Deletes a resident only when there are no related complaints. Returns `409` if deleting the resident would remove complaint history.
-
----
-
-## Complaints API
-
-Base path: `/api/v1/complaints`
-
-### List Complaints
-```http
-GET /api/v1/complaints?page=1&limit=10&search=leakage&compoundId={compoundId}&residentId={residentId}&unitId={unitId}&status=OPEN&priority=HIGH
-```
-
-Returns a paginated list of complaints with basic compound, resident, and unit information.
-
-### Get Complaint
-```http
-GET /api/v1/complaints/{id}
-```
-
-Returns one complaint by UUID with basic compound, resident, and unit information.
-
-### Create Complaint
-```http
-POST /api/v1/complaints
-Content-Type: application/json
-
-{
-  "compoundId": "ca155709-2f8c-47ab-8e91-6fa0504cf435",
-  "residentId": "1b0e1f72-2d0c-4a2d-bd47-1a125bfe5a6c",
-  "unitId": "f863d57c-e951-4a4d-bced-ce2bc2647d13",
-  "title": "Water leakage in bathroom",
-  "description": "There is a water leakage issue that needs maintenance follow-up.",
-  "priority": "HIGH",
-  "status": "OPEN"
-}
-```
-
-Returns `404` if the compound, resident, or unit does not exist, and `409` if the resident or unit belongs to another compound.
-
-### Update Complaint
-```http
-PATCH /api/v1/complaints/{id}
-Content-Type: application/json
-
-{
-  "status": "IN_PROGRESS"
-}
-```
-
-Use `"unitId": null` to unlink a complaint from a unit.
-
-### Close Complaint
-```http
-DELETE /api/v1/complaints/{id}
-```
-
-Closes the complaint using `status=CLOSED` instead of hard deleting historical complaint data. Repeating delete for an already closed complaint returns `200` with a clear message.
-
----
-
-## R4A — Rental Listing Content Backend Hardening
-
-In this phase, we hardened the rental listing content and metadata contracts to support professional content management, search engine optimization (SEO), and featured showcases.
-
-### 1. Manual & Fallback Slug Support
-- Admin users can optionally provide a custom `slug` when creating or updating a rental listing.
-- The `slug` must consist only of lowercase alphanumeric characters and single hyphens (e.g. `premium-apartment-in-sebahi`), validated with the regex: `^[a-z0-9]+(?:-[a-z0-9]+)*$`.
-- If a custom slug conflicts with an existing listing, the API returns a `409 Conflict` error with code `RENTAL_LISTING_SLUG_CONFLICT`.
-- If the slug is not provided, the backend automatically generates a unique slug:
-  - If the title contains English-safe characters, it is slugified normally.
-  - If the title is Arabic-only (or results in an empty slug), it automatically falls back to `sebahi-rental-{timestamp}`.
-  - A unique suffix (e.g. `-2`, `-3`) is appended in case of conflicts to guarantee uniqueness.
-
-### 2. isFeatured Showcase Status
-- Listings now support the `isFeatured` boolean flag.
-- The flag can be set by the admin during creation or update.
-- Public search results are ordered by `isFeatured DESC` first, ensuring featured listings are highlighted at the top, and support filtering by `featured=true` or `featured=false`.
-
-### 3. Listing Images Contract
-- Admin creation accepts an optional array of `images` representing listing photos.
-- Admin updates allow replacing the full image set transactionally (if `images` is provided, otherwise the image set is left unchanged).
-- Preprocessing guarantees that there is **at most one cover image** (`isCover=true`). If multiple are marked as cover, only the first is kept as cover. If none are marked, the first image is default-marked as cover.
-- In both public and admin responses, listing images are ordered by `isCover DESC`, `sortOrder ASC`, and `createdAt ASC`.
-- Admin listing images can be uploaded through signed Cloudinary uploads, while direct image URLs remain accepted as a fallback.
-
-### 4. Public API Response Security
-- Public listing endpoints (e.g. `GET /listings` and `GET /listings/:slug`) do not expose sensitive owner contacts (`owner.phone`, `owner.email`, `owner.nationalId`, `owner.whatsapp`).
-- Owner contact remains hidden from public rental responses. The current bed reservation flow uses WhatsApp review and does not unlock owner phone or email through payment.
-
-### 5. Amenities & Currency Status
-- **Amenities / Features**: Amenities are not supported in the database schema in this phase. Implementing them will require a dedicated database schema and migration phase in the future.
-- **Currency**: Platform currency is EGP by platform policy, aligned with the database records.
+## API Focus
+The repository centers on backend concerns for:
+- Residential compound management
+- Resident records and complaints
+- Admin operations and role-based access control
+- Rental discovery, inquiries, and bed reservations
+- Public and internal API responses with consistent validation and pagination

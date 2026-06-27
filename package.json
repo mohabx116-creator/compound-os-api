@@ -1,7 +1,7 @@
 {
   "name": "compound-os-api",
   "version": "1.0.0",
-  "description": "Compound OS Backend API Foundation",
+  "description": "Residential management and rental marketplace backend built with Node.js, TypeScript, Express, PostgreSQL, and Prisma.",
   "main": "dist/server.js",
   "type": "module",
   "scripts": {
