@@ -42,6 +42,12 @@ const realEstateAmenityValues = [
 ] as const;
 const realEstateAmenityEnum = z.enum(realEstateAmenityValues);
 
+export const cloudinaryUploadSignatureSchema = z
+  .object({
+    folder: z.string().trim().max(200).optional(),
+  })
+  .strict();
+
 // Images Validation
 export const ImageSchema = z.object({
   url: z.string().url(),

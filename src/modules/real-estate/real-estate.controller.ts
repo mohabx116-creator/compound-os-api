@@ -3,7 +3,8 @@ import { realEstateService } from './real-estate.service.js';
 import { 
   PublicListingsQuerySchema, 
   CreateOwnerSubmissionSchema, 
-  CreateRealEstateInquirySchema 
+  CreateRealEstateInquirySchema,
+  cloudinaryUploadSignatureSchema,
 } from './real-estate.schema.js';
 import { mapPublicListingsDto, mapPublicListingDto } from './real-estate.mapper.js';
 
@@ -44,6 +45,22 @@ export const createOwnerSubmission = async (req: Request, res: Response) => {
     res.status(201).json({ success: true, message: 'Real estate owner submission created successfully', data: { id: submission.id, status: submission.status } });
   } catch (error: any) {
     res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+export const createOwnerSubmissionUploadSignature = async (req: Request, res: Response) => {
+  try {
+    const input = cloudinaryUploadSignatureSchema.parse(req.body ?? {});
+    const result = realEstateService.createCloudinaryUploadSignature(input);
+
+    res.json({
+      success: true,
+      message: 'Real estate upload signature created successfully',
+      data: result,
+    });
+  } catch (error: any) {
+    const statusCode = error?.statusCode ?? 400;
+    res.status(statusCode).json({ success: false, message: error.message });
   }
 };
 

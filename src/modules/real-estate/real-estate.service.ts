@@ -1,12 +1,58 @@
 import { PrismaClient, RealEstateStatus, RealEstateSubmissionStatus, Prisma } from '@prisma/client';
+import crypto from 'crypto';
+import { AppError } from '../../common/errors/AppError.js';
+import { ErrorCodes } from '../../common/errors/error-codes.js';
+import { env } from '../../config/env.js';
 
 const prisma = new PrismaClient();
 
 const DEFAULT_REAL_ESTATE_COMPOUND_CODE = 'black-horse';
 const REAL_ESTATE_WHATSAPP_PHONE = '201224591618';
 
+function createCloudinaryUploadSignatureForFolder(folder: string) {
+  if (
+    !env.CLOUDINARY_CLOUD_NAME ||
+    !env.CLOUDINARY_API_KEY ||
+    !env.CLOUDINARY_API_SECRET
+  ) {
+    throw new AppError(
+      'Cloudinary image upload is not configured',
+      503,
+      ErrorCodes.CLOUDINARY_NOT_CONFIGURED,
+    );
+  }
+
+  const timestamp = Math.floor(Date.now() / 1000);
+  const paramsToSign = `folder=${folder}&timestamp=${timestamp}${env.CLOUDINARY_API_SECRET}`;
+  const signature = crypto.createHash('sha1').update(paramsToSign).digest('hex');
+
+  return {
+    cloudName: env.CLOUDINARY_CLOUD_NAME,
+    uploadUrl: `https://api.cloudinary.com/v1_1/${env.CLOUDINARY_CLOUD_NAME}/image/upload`,
+    fields: {
+      api_key: env.CLOUDINARY_API_KEY,
+      folder,
+      timestamp,
+      signature,
+    },
+  };
+}
+
 export class RealEstateService {
   // --- Public Methods ---
+
+  createCloudinaryUploadSignature(input: { folder?: string } = {}) {
+    const configuredFolder =
+      env.CLOUDINARY_OWNER_SUBMISSIONS_FOLDER ||
+      env.CLOUDINARY_UPLOAD_FOLDER ||
+      'dalilsubhi/owner-submissions';
+    const requestedFolder = input.folder?.trim();
+    const folder = requestedFolder?.startsWith(configuredFolder)
+      ? requestedFolder
+      : configuredFolder;
+
+    return createCloudinaryUploadSignatureForFolder(folder);
+  }
 
   async getPublicListings(filters: {
     compoundId?: string;
