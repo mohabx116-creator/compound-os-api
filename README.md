@@ -1,5 +1,7 @@
 # Compound OS API — Residential Management & Rental Marketplace Backend
 
+Production-oriented Node.js/TypeScript backend for compound management, resident services, admin workflows, and rental reservation operations.
+
 This is the professional, production-oriented backend API foundation for **Compound OS**, a modern residential compound management system.
 
 ---
