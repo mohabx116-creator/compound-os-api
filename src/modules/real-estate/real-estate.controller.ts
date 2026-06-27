@@ -50,8 +50,16 @@ export const createOwnerSubmission = async (req: Request, res: Response) => {
 export const createInquiry = async (req: Request, res: Response) => {
   try {
     const data = CreateRealEstateInquirySchema.parse(req.body);
-    const inquiry = await realEstateService.createInquiry(data);
-    res.status(201).json({ success: true, message: 'Real estate inquiry created successfully', data: { id: inquiry.id, status: inquiry.status } });
+    const result = await realEstateService.createInquiry(data);
+    res.status(201).json({
+      success: true,
+      message: 'Real estate inquiry created successfully',
+      data: {
+        id: result.inquiry.id,
+        status: result.inquiry.status,
+        whatsappUrl: result.whatsappUrl,
+      },
+    });
   } catch (error: any) {
     res.status(400).json({ success: false, message: error.message });
   }

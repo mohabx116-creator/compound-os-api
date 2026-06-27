@@ -1,11 +1,9 @@
 import { z } from 'zod';
 import {
-  RealEstateType,
   RealEstateStatus,
   RealEstateFinishing,
   RealEstateFinishingStatus,
   RealEstatePhase,
-  RealEstateElectricityStatus,
   RealEstateOwnershipProofType,
   RealEstateInquiryType,
   RealEstateInquiryStatus,
@@ -14,19 +12,16 @@ import {
 } from '@prisma/client';
 
 // Shared Enums mapping for Zod
-const realEstateTypeEnum = z.nativeEnum(RealEstateType);
 const realEstateStatusEnum = z.nativeEnum(RealEstateStatus);
 const realEstateFinishingEnum = z.nativeEnum(RealEstateFinishing);
 const realEstateFinishingStatusEnum = z.nativeEnum(RealEstateFinishingStatus);
 const realEstatePhaseEnum = z.nativeEnum(RealEstatePhase);
-const realEstateElectricityStatusEnum = z.nativeEnum(RealEstateElectricityStatus);
 const realEstateOwnershipProofTypeEnum = z.nativeEnum(RealEstateOwnershipProofType);
 const realEstateFurnishingStatusEnum = z.nativeEnum(RealEstateFurnishingStatus);
 const realEstateInquiryTypeEnum = z.nativeEnum(RealEstateInquiryType);
 const realEstateInquiryStatusEnum = z.nativeEnum(RealEstateInquiryStatus);
 const realEstateSubmissionStatusEnum = z.nativeEnum(RealEstateSubmissionStatus);
 const realEstateFloorValues = [
-  'BASEMENT',
   'GROUND',
   '1',
   '2',
@@ -34,37 +29,16 @@ const realEstateFloorValues = [
   '4',
   '5',
   '6',
-  '7',
-  '8',
-  '9',
-  '10',
-  '11',
-  '12',
-  '13',
-  '14',
-  '15',
-  '16',
-  '17',
-  '18',
-  '19',
-  '20',
   'ROOF',
 ] as const;
 const realEstateFloorEnum = z.enum(realEstateFloorValues);
 const realEstateAmenityValues = [
-  'ELEVATOR',
-  'GARAGE',
-  'SECURITY',
   'SURVEILLANCE_CAMERAS',
-  'INTERCOM',
   'NATURAL_GAS',
   'WATER_METER',
   'GAS_METER',
   'AIR_CONDITIONERS',
-  'KITCHEN',
   'ELECTRICAL_APPLIANCES',
-  'BALCONY_OR_TERRACE',
-  'LAND_SHARE',
 ] as const;
 const realEstateAmenityEnum = z.enum(realEstateAmenityValues);
 
@@ -83,7 +57,7 @@ export const CreateRealEstateInquirySchema = z.object({
   customerName: z.string().min(2),
   customerPhone: z.string().min(8),
   customerWhatsapp: z.string().optional(),
-  inquiryType: realEstateInquiryTypeEnum,
+  inquiryType: realEstateInquiryTypeEnum.default(RealEstateInquiryType.INTEREST),
   message: z.string().optional(),
 });
 
@@ -92,7 +66,6 @@ export const CreateOwnerSubmissionSchema = z.object({
   submitterPhone: z.string().min(8),
   submitterWhatsapp: z.string().optional(),
   submitterEmail: z.string().email().optional().or(z.literal('')),
-  type: realEstateTypeEnum,
   title: z.string().min(5),
   price: z.number().positive(),
   areaSqm: z.number().positive(),
@@ -115,7 +88,6 @@ export const CreateOwnerSubmissionSchema = z.object({
   hasElevator: z.boolean().optional(),
   hasParking: z.boolean().optional(),
   phase: realEstatePhaseEnum.optional(),
-  electricityStatus: realEstateElectricityStatusEnum.optional(),
   ownershipProofType: realEstateOwnershipProofTypeEnum.optional(),
   areInstallmentsSettled: z.boolean().optional(),
   isDepositSettled: z.boolean().optional(),
@@ -138,7 +110,6 @@ export const CreateOwnerSubmissionSchema = z.object({
 // Admin Create Listing
 export const AdminCreateRealEstateListingSchema = z.object({
   compoundId: z.string().uuid().optional(),
-  type: realEstateTypeEnum,
   title: z.string().min(5),
   slug: z.string().min(3).optional(), // auto generated if missing
   status: realEstateStatusEnum.default(RealEstateStatus.DRAFT),
@@ -173,7 +144,6 @@ export const AdminCreateRealEstateListingSchema = z.object({
   hasParking: z.boolean().optional(),
   view: z.string().optional(),
   phase: realEstatePhaseEnum.optional(),
-  electricityStatus: realEstateElectricityStatusEnum.optional(),
   ownershipProofType: realEstateOwnershipProofTypeEnum.optional(),
   areInstallmentsSettled: z.boolean().optional(),
   isDepositSettled: z.boolean().optional(),
@@ -213,7 +183,6 @@ export const AdminUpdateInquiryStatusSchema = z.object({
 
 // Query Schemas
 export const PublicListingsQuerySchema = z.object({
-  type: realEstateTypeEnum.optional(),
   compoundId: z.string().uuid().optional(),
   minPrice: z.coerce.number().positive().optional(),
   maxPrice: z.coerce.number().positive().optional(),

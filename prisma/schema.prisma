@@ -831,16 +831,6 @@ model AdminNotification {
 
 // ─── Real Estate Sales Module ───────────────────────────────────────────────
 
-enum RealEstateType {
-  APARTMENT
-  VILLA
-  STUDIO
-  DUPLEX
-  SHOP
-  OFFICE
-  LAND
-}
-
 enum RealEstateStatus {
   DRAFT
   PENDING_REVIEW
@@ -872,11 +862,6 @@ enum RealEstateFinishingStatus {
 enum RealEstatePhase {
   PHASE_ONE
   PHASE_TWO
-}
-
-enum RealEstateElectricityStatus {
-  ELECTRICITY_METER
-  ELECTRICITY_PRACTICE
 }
 
 enum RealEstateOwnershipProofType {
@@ -914,7 +899,6 @@ model RealEstateListing {
   id          String           @id @default(uuid())
   compoundId  String           @map("compound_id")
   compound    Compound         @relation(fields: [compoundId], references: [id], onDelete: Cascade)
-  type        RealEstateType
   title       String
   slug        String           @unique
   status      RealEstateStatus @default(DRAFT)
@@ -950,7 +934,6 @@ model RealEstateListing {
   hasParking       Boolean?                    @map("has_parking")
   view             String?
   phase            RealEstatePhase?
-  electricityStatus RealEstateElectricityStatus? @map("electricity_status")
   ownershipProofType RealEstateOwnershipProofType? @map("ownership_proof_type")
   // Positive semantics: true means the financial obligation is settled.
   areInstallmentsSettled Boolean?              @map("has_installments")
@@ -976,8 +959,6 @@ model RealEstateListing {
 
   @@index([compoundId])
   @@index([status])
-  @@index([type])
-  @@index([type, status])
   @@index([isFeatured])
   @@index([sortOrder])
   @@map("real_estate_listings")
@@ -1007,7 +988,6 @@ model RealEstateOwnerSubmission {
   submitterPhone    String         @map("submitter_phone")
   submitterWhatsapp String?        @map("submitter_whatsapp")
   submitterEmail    String?        @map("submitter_email")
-  type              RealEstateType
   title             String
   price             Decimal        @db.Decimal(12, 2)
   areaSqm           Decimal        @map("area_sqm") @db.Decimal(10, 2)
@@ -1030,7 +1010,6 @@ model RealEstateOwnerSubmission {
   hasElevator        Boolean?                    @map("has_elevator")
   hasParking         Boolean?                    @map("has_parking")
   phase              RealEstatePhase?
-  electricityStatus  RealEstateElectricityStatus? @map("electricity_status")
   ownershipProofType RealEstateOwnershipProofType? @map("ownership_proof_type")
   // Positive semantics: true means the financial obligation is settled.
   areInstallmentsSettled Boolean?               @map("has_installments")
@@ -1057,7 +1036,6 @@ model RealEstateOwnerSubmission {
 
   @@index([compoundId])
   @@index([status])
-  @@index([type])
   @@map("real_estate_owner_submissions")
 }
 

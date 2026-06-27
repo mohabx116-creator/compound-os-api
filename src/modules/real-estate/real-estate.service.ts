@@ -3,12 +3,12 @@ import { PrismaClient, RealEstateStatus, RealEstateSubmissionStatus, Prisma } fr
 const prisma = new PrismaClient();
 
 const DEFAULT_REAL_ESTATE_COMPOUND_CODE = 'black-horse';
+const REAL_ESTATE_WHATSAPP_PHONE = '201224591618';
 
 export class RealEstateService {
   // --- Public Methods ---
 
   async getPublicListings(filters: {
-    type?: any;
     compoundId?: string;
     minPrice?: number;
     maxPrice?: number;
@@ -24,8 +24,6 @@ export class RealEstateService {
       status: RealEstateStatus.PUBLISHED,
       compoundId: compound.id,
     };
-
-    if (filters.type) where.type = filters.type;
     
     if (filters.minPrice || filters.maxPrice) {
       where.price = {};
@@ -123,7 +121,18 @@ export class RealEstateService {
 
       const listing = await tx.realEstateListing.findUnique({
         where: { id: data.listingId },
-        select: { title: true, compoundId: true },
+        select: {
+          title: true,
+          slug: true,
+          price: true,
+          areaSqm: true,
+          bedrooms: true,
+          bathrooms: true,
+          compoundId: true,
+          compound: {
+            select: { name: true },
+          },
+        },
       });
 
       // Add Notification
@@ -139,7 +148,17 @@ export class RealEstateService {
         },
       });
 
-      return inquiry;
+      const whatsappUrl = listing
+        ? this.buildRealEstateWhatsAppUrl({
+            listing,
+            inquiry: {
+              customerName: data.customerName,
+              customerPhone: data.customerPhone,
+            },
+          })
+        : null;
+
+      return { inquiry, whatsappUrl };
     });
   }
 
@@ -294,7 +313,6 @@ export class RealEstateService {
       const listing = await tx.realEstateListing.create({
         data: {
           compoundId: submission.compoundId,
-          type: submission.type,
           title: submission.title,
           slug: this.generateSlug(submission.title),
           status: RealEstateStatus.DRAFT,
@@ -324,7 +342,6 @@ export class RealEstateService {
           hasParking: submission.hasParking,
           furnishingStatus: submission.furnishingStatus,
           phase: submission.phase,
-          electricityStatus: submission.electricityStatus,
           ownershipProofType: submission.ownershipProofType,
           areInstallmentsSettled: submission.areInstallmentsSettled,
           isDepositSettled: submission.isDepositSettled,
@@ -370,7 +387,7 @@ export class RealEstateService {
       orderBy: { createdAt: 'desc' },
       include: {
         listing: {
-          select: { title: true, id: true, type: true },
+          select: { title: true, id: true },
         },
       },
     });
@@ -413,6 +430,58 @@ export class RealEstateService {
     }
 
     return compound;
+  }
+
+  private buildRealEstateWhatsAppUrl(input: {
+    listing: {
+      title: string;
+      slug: string;
+      price: Prisma.Decimal;
+      areaSqm: Prisma.Decimal;
+      bedrooms: number | null;
+      bathrooms: number | null;
+      compound: {
+        name: string;
+      } | null;
+    };
+    inquiry: {
+      customerName: string;
+      customerPhone: string;
+    };
+  }) {
+    const message = [
+      'طلب عرض شقة تمليك',
+      '',
+      `رقم الإعلان: ${input.listing.slug}`,
+      `العقار: ${input.listing.title}`,
+      `الموقع: ${input.listing.compound?.name ?? 'غير متاح'}`,
+      `السعر: ${this.formatCurrency(input.listing.price)}`,
+      `المساحة: ${input.listing.areaSqm.toString()} م²`,
+      `الغرف: ${input.listing.bedrooms != null ? input.listing.bedrooms : 'غير متاح'}`,
+      `الحمامات: ${input.listing.bathrooms != null ? input.listing.bathrooms : 'غير متاح'}`,
+      '',
+      'بيانات العميل:',
+      `الاسم: ${input.inquiry.customerName}`,
+      `رقم الهاتف: ${input.inquiry.customerPhone}`,
+      '',
+      'أرغب في استكمال إجراءات الحجز/الدفع الخاصة بالشقة.',
+    ].join('\n');
+
+    return `https://wa.me/${REAL_ESTATE_WHATSAPP_PHONE}?text=${encodeURIComponent(message)}`;
+  }
+
+  private formatCurrency(value: Prisma.Decimal) {
+    const amount = Number(value.toString());
+
+    if (!Number.isFinite(amount)) {
+      return value.toString();
+    }
+
+    return new Intl.NumberFormat('ar-EG', {
+      style: 'currency',
+      currency: 'EGP',
+      maximumFractionDigits: 0,
+    }).format(amount);
   }
 }
 
