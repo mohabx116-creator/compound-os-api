@@ -1,4 +1,4 @@
-# Compound OS API Backend Foundation
+# Compound OS API — Residential Management & Rental Marketplace Backend
 
 This is the professional, production-oriented backend API foundation for **Compound OS**, a modern residential compound management system.
 
