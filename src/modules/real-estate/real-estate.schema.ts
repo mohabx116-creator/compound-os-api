@@ -117,8 +117,8 @@ export const CreateOwnerSubmissionSchema = z.object({
   phase: realEstatePhaseEnum.optional(),
   electricityStatus: realEstateElectricityStatusEnum.optional(),
   ownershipProofType: realEstateOwnershipProofTypeEnum.optional(),
-  hasInstallments: z.boolean().optional(),
-  hasDeposit: z.boolean().optional(),
+  areInstallmentsSettled: z.boolean().optional(),
+  isDepositSettled: z.boolean().optional(),
   hasFinalContract: z.boolean().optional(),
   
   // Land Fields
@@ -175,8 +175,8 @@ export const AdminCreateRealEstateListingSchema = z.object({
   phase: realEstatePhaseEnum.optional(),
   electricityStatus: realEstateElectricityStatusEnum.optional(),
   ownershipProofType: realEstateOwnershipProofTypeEnum.optional(),
-  hasInstallments: z.boolean().optional(),
-  hasDeposit: z.boolean().optional(),
+  areInstallmentsSettled: z.boolean().optional(),
+  isDepositSettled: z.boolean().optional(),
   hasFinalContract: z.boolean().optional(),
   
   pricePerMeter: z.number().positive().optional(),

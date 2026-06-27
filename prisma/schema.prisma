@@ -952,8 +952,9 @@ model RealEstateListing {
   phase            RealEstatePhase?
   electricityStatus RealEstateElectricityStatus? @map("electricity_status")
   ownershipProofType RealEstateOwnershipProofType? @map("ownership_proof_type")
-  hasInstallments  Boolean?                    @map("has_installments")
-  hasDeposit       Boolean?                    @map("has_deposit")
+  // Positive semantics: true means the financial obligation is settled.
+  areInstallmentsSettled Boolean?              @map("has_installments")
+  isDepositSettled       Boolean?              @map("has_deposit")
   hasFinalContract Boolean?                    @map("has_final_contract")
 
   // Land optional fields
@@ -1031,8 +1032,9 @@ model RealEstateOwnerSubmission {
   phase              RealEstatePhase?
   electricityStatus  RealEstateElectricityStatus? @map("electricity_status")
   ownershipProofType RealEstateOwnershipProofType? @map("ownership_proof_type")
-  hasInstallments    Boolean?                    @map("has_installments")
-  hasDeposit         Boolean?                    @map("has_deposit")
+  // Positive semantics: true means the financial obligation is settled.
+  areInstallmentsSettled Boolean?               @map("has_installments")
+  isDepositSettled       Boolean?               @map("has_deposit")
   hasFinalContract   Boolean?                    @map("has_final_contract")
   pricePerMeter      Decimal?                    @map("price_per_meter") @db.Decimal(12, 2)
   frontage           Decimal?                    @db.Decimal(10, 2)
