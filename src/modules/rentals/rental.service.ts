@@ -2515,24 +2515,6 @@ export class RentalService {
         select: adminBedSelect,
       });
 
-      if (targetStatus === RentalBedStatus.RENTED) {
-        const reservationId = updatedBed.reservationId ?? bed.reservationId ?? null;
-        if (reservationId) {
-          const quantity = await tx.rentalBed.count({
-            where: { reservationId, status: RentalBedStatus.RENTED },
-          });
-
-          await this.recordBedRentalRevenue(tx, {
-            compoundId: updatedBed.listing.compoundId,
-            listingId: bed.listingId,
-            reservationId,
-            paymentId: null,
-            occurredAt: new Date(),
-            quantity: quantity > 0 ? quantity : 1,
-          });
-        }
-      }
-
       const listing = await this.syncListingCountersFromBeds(bed.listingId, tx);
 
       return {
