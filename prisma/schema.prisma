@@ -89,6 +89,19 @@ enum RentalPaymentPurpose {
   OWNER_PAYOUT
 }
 
+enum PlatformRevenueSourceType {
+  RENTAL_LISTING
+  RENTAL_RESERVATION
+  REAL_ESTATE_LISTING
+}
+
+enum PlatformRevenueCategory {
+  RENTAL_STANDARD_LISTING
+  RENTAL_FEATURED_LISTING
+  BED_RENTAL
+  SALE_APARTMENT_LISTING
+}
+
 enum RentalPaymentStatus {
   INITIATED
   PENDING
@@ -172,6 +185,7 @@ model Compound {
   rentalReservations         RentalReservation[]
   rentalPayments             RentalPayment[]
   rentalLedgerEntries        RentalPlatformLedgerEntry[]
+  platformRevenueEntries      PlatformRevenueEntry[]
   rentalOwnerSubmissions     RentalOwnerSubmission[]
   rentalTenants              RentalTenant[]
   adminNotifications         AdminNotification[]
@@ -342,6 +356,7 @@ model RentalListing {
   reservations               RentalReservation[]
   payments                   RentalPayment[]
   ledgerEntries              RentalPlatformLedgerEntry[]
+  platformRevenueEntries     PlatformRevenueEntry[]
   createdFromOwnerSubmission RentalOwnerSubmission?
   beds                       RentalBed[]
   tenants                    RentalTenant[]
@@ -523,6 +538,7 @@ model RentalReservation {
 
   payments      RentalPayment[]
   ledgerEntries RentalPlatformLedgerEntry[]
+  platformRevenueEntries PlatformRevenueEntry[]
   rentalTenant  RentalTenant?
 
   @@index([listingId])
@@ -561,6 +577,7 @@ model RentalPayment {
   updatedAt             DateTime             @updatedAt @map("updated_at")
 
   ledgerEntries RentalPlatformLedgerEntry[]
+  platformRevenueEntries PlatformRevenueEntry[]
 
   @@unique([provider, providerTransactionId])
   @@index([compoundId])
@@ -596,6 +613,40 @@ model RentalPlatformLedgerEntry {
   @@index([reservationId])
   @@index([paymentId])
   @@map("rental_platform_ledger_entries")
+}
+
+model PlatformRevenueEntry {
+  id                  String                   @id @default(uuid())
+  compoundId          String                   @map("compound_id")
+  compound            Compound                 @relation(fields: [compoundId], references: [id], onDelete: Cascade)
+  sourceType          PlatformRevenueSourceType @map("source_type")
+  sourceId            String                   @map("source_id")
+  revenueCategory     PlatformRevenueCategory   @map("revenue_category")
+  listingId           String?                  @map("listing_id")
+  listing             RentalListing?           @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  realEstateListingId String?                  @map("real_estate_listing_id")
+  realEstateListing   RealEstateListing?       @relation(fields: [realEstateListingId], references: [id], onDelete: SetNull)
+  reservationId       String?                  @map("reservation_id")
+  reservation         RentalReservation?       @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  paymentId           String?                  @map("payment_id")
+  payment             RentalPayment?           @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  amount              Decimal                  @db.Decimal(12, 2)
+  unitRate            Decimal                  @map("unit_rate") @db.Decimal(12, 2)
+  quantity            Decimal                  @db.Decimal(12, 2)
+  currency            String                   @default("EGP")
+  description         String
+  metadata            Json?
+  occurredAt          DateTime                 @default(now()) @map("occurred_at")
+  createdAt           DateTime                 @default(now()) @map("created_at")
+
+  @@unique([sourceType, sourceId])
+  @@index([compoundId])
+  @@index([listingId])
+  @@index([realEstateListingId])
+  @@index([reservationId])
+  @@index([paymentId])
+  @@index([occurredAt])
+  @@map("platform_revenue_entries")
 }
 
 // ─── Service Directory ────────────────────────────────────────────────────────
@@ -956,6 +1007,7 @@ model RealEstateListing {
 
   images    RealEstateListingImage[]
   inquiries RealEstateInquiry[]
+  platformRevenueEntries PlatformRevenueEntry[]
 
   @@index([compoundId])
   @@index([status])

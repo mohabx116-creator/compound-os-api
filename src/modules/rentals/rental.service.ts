@@ -1,6 +1,8 @@
 import {
   AdminNotificationEntityType,
   AdminNotificationEventType,
+  PlatformRevenueCategory,
+  PlatformRevenueSourceType,
   Prisma,
   RentalInquiryStatus,
   RentalFurnishingStatus,
@@ -22,6 +24,7 @@ import {
 } from '../../common/utils/pagination.js';
 import { prisma } from '../../config/prisma.js';
 import { env } from '../../config/env.js';
+import { PlatformRevenueService } from '../platform-revenue/platform-revenue.service.js';
 import {
   addDays,
   RENTAL_POLICY,
@@ -170,6 +173,11 @@ const adminBedSelect = {
   notes: true,
   createdAt: true,
   updatedAt: true,
+  listing: {
+    select: {
+      compoundId: true,
+    },
+  },
 } satisfies Prisma.RentalBedSelect;
 
 const adminOwnerSelect = {
@@ -2507,6 +2515,24 @@ export class RentalService {
         select: adminBedSelect,
       });
 
+      if (targetStatus === RentalBedStatus.RENTED) {
+        const reservationId = updatedBed.reservationId ?? bed.reservationId ?? null;
+        if (reservationId) {
+          const quantity = await tx.rentalBed.count({
+            where: { reservationId, status: RentalBedStatus.RENTED },
+          });
+
+          await this.recordBedRentalRevenue(tx, {
+            compoundId: updatedBed.listing.compoundId,
+            listingId: bed.listingId,
+            reservationId,
+            paymentId: null,
+            occurredAt: new Date(),
+            quantity: quantity > 0 ? quantity : 1,
+          });
+        }
+      }
+
       const listing = await this.syncListingCountersFromBeds(bed.listingId, tx);
 
       return {
@@ -3263,15 +3289,21 @@ export class RentalService {
 
     const now = new Date();
 
-    const updated = await prisma.rentalListing.update({
-      where: { id },
-      data: {
-        status: RentalListingStatus.ACTIVE,
-        isPublished: true,
-        publishedAt: now,
-        expiresAt: addDays(now, RENTAL_POLICY.listingDurationDays),
-      },
-      include: adminListingInclude,
+    const updated = await prisma.$transaction(async (tx) => {
+      const updatedListing = await tx.rentalListing.update({
+        where: { id },
+        data: {
+          status: RentalListingStatus.ACTIVE,
+          isPublished: true,
+          publishedAt: now,
+          expiresAt: addDays(now, RENTAL_POLICY.listingDurationDays),
+        },
+        include: adminListingInclude,
+      });
+
+      await this.recordRentalListingRevenue(tx, updatedListing, now);
+
+      return updatedListing;
     });
     clearPublicRentalReadCaches();
     return this.addAvailableBeds(updated);
@@ -3333,14 +3365,20 @@ export class RentalService {
       listing.rentedBeds
     );
 
-    const updated = await prisma.rentalListing.update({
-      where: { id },
-      data: {
-        status: RentalListingStatus.ACTIVE,
-        isPublished: true,
-        reservedUntil: null,
-      },
-      include: adminListingInclude,
+    const updated = await prisma.$transaction(async (tx) => {
+      const updatedListing = await tx.rentalListing.update({
+        where: { id },
+        data: {
+          status: RentalListingStatus.ACTIVE,
+          isPublished: true,
+          reservedUntil: null,
+        },
+        include: adminListingInclude,
+      });
+
+      await this.recordRentalListingRevenue(tx, updatedListing, updatedListing.publishedAt ?? new Date());
+
+      return updatedListing;
     });
     clearPublicRentalReadCaches();
     return this.addAvailableBeds(updated);
@@ -3400,6 +3438,12 @@ export class RentalService {
       const commissionRate = Number(reservation.listing.platformCommissionRate);
       const commissionAmount = Number(((monthlyRent * commissionRate) / 100).toFixed(2));
       const ownerReceivable = Number((monthlyRent - commissionAmount).toFixed(2));
+      const confirmedBedQuantity = await tx.rentalBed.count({
+        where: {
+          reservationId: reservation.id,
+          status: RentalBedStatus.RESERVED,
+        },
+      });
 
       const confirmedReservation = await tx.rentalReservation.update({
         where: { id },
@@ -3450,6 +3494,15 @@ export class RentalService {
             description: 'Owner receivable before payout processing',
           },
         ],
+      });
+
+      await this.recordBedRentalRevenue(tx, {
+        compoundId: reservation.compoundId,
+        listingId: reservation.listingId,
+        reservationId: reservation.id,
+        paymentId: reservation.paymentId,
+        occurredAt: now,
+        quantity: confirmedBedQuantity > 0 ? confirmedBedQuantity : 1,
       });
 
       return {
@@ -3995,6 +4048,85 @@ export class RentalService {
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === 'P2002'
     );
+  }
+
+  private static async recordRentalListingRevenue(
+    tx: RentalPrismaClient,
+    listing: {
+      id: string;
+      compoundId: string;
+      isFeatured: boolean;
+      title: string;
+      slug: string;
+      publishedAt: Date | null;
+      isPublished: boolean;
+    },
+    occurredAt: Date,
+  ) {
+    if (!listing.isPublished) {
+      return;
+    }
+
+    const revenueCategory = listing.isFeatured
+      ? PlatformRevenueCategory.RENTAL_FEATURED_LISTING
+      : PlatformRevenueCategory.RENTAL_STANDARD_LISTING;
+    const unitRate = listing.isFeatured ? new Prisma.Decimal(750) : new Prisma.Decimal(500);
+
+    await PlatformRevenueService.recordRevenueEntry(tx, {
+      compoundId: listing.compoundId,
+      sourceType: PlatformRevenueSourceType.RENTAL_LISTING,
+      sourceId: listing.id,
+      revenueCategory,
+      amount: unitRate,
+      unitRate,
+      quantity: new Prisma.Decimal(1),
+      currency: RENTAL_POLICY.currency,
+      description: listing.isFeatured
+        ? 'رسوم نشر إعلان إيجار مميز'
+        : 'رسوم نشر إعلان إيجار عادي',
+      occurredAt: listing.publishedAt ?? occurredAt,
+      listingId: listing.id,
+      metadata: {
+        title: listing.title,
+        slug: listing.slug,
+        isFeatured: listing.isFeatured,
+      },
+    });
+  }
+
+  private static async recordBedRentalRevenue(
+    tx: RentalPrismaClient,
+    input: {
+      compoundId: string;
+      listingId: string;
+      reservationId: string;
+      paymentId?: string | null;
+      occurredAt: Date;
+      quantity: number;
+    },
+  ) {
+    const quantity = new Prisma.Decimal(input.quantity > 0 ? input.quantity : 1);
+    const unitRate = new Prisma.Decimal(200);
+    const amount = unitRate.mul(quantity);
+
+    await PlatformRevenueService.recordRevenueEntry(tx, {
+      compoundId: input.compoundId,
+      sourceType: PlatformRevenueSourceType.RENTAL_RESERVATION,
+      sourceId: input.reservationId,
+      revenueCategory: PlatformRevenueCategory.BED_RENTAL,
+      amount,
+      unitRate,
+      quantity,
+      currency: RENTAL_POLICY.currency,
+      description: 'إيراد تأجير سرير مؤكد',
+      occurredAt: input.occurredAt,
+      listingId: input.listingId,
+      reservationId: input.reservationId,
+      paymentId: input.paymentId ?? null,
+      metadata: {
+        quantity: quantity.toString(),
+      },
+    });
   }
 
   private static buildRentalTenantData(input: {

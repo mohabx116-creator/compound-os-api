@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { AppError } from '../../common/errors/AppError.js';
 import { ErrorCodes } from '../../common/errors/error-codes.js';
-import { ADMIN_ROLES } from './auth.constants.js';
+import { ADMIN_ROLES, OWNER_ROLES } from './auth.constants.js';
 import { verifyAccessToken } from './jwt.service.js';
 
 export function requireAuth(req: Request, _res: Response, next: NextFunction): void {
@@ -46,3 +46,4 @@ export function requireRoles(allowedRoles: readonly string[]) {
 }
 
 export const requireAdminRole = requireRoles(ADMIN_ROLES);
+export const requireOwnerRole = requireRoles(OWNER_ROLES);

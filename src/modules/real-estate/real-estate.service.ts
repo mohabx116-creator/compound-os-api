@@ -1,8 +1,9 @@
-import { PrismaClient, RealEstateStatus, RealEstateSubmissionStatus, Prisma } from '@prisma/client';
+import { PrismaClient, RealEstateStatus, RealEstateSubmissionStatus, Prisma, PlatformRevenueCategory, PlatformRevenueSourceType } from '@prisma/client';
 import crypto from 'crypto';
 import { AppError } from '../../common/errors/AppError.js';
 import { ErrorCodes } from '../../common/errors/error-codes.js';
 import { env } from '../../config/env.js';
+import { PlatformRevenueService } from '../platform-revenue/platform-revenue.service.js';
 
 const prisma = new PrismaClient();
 
@@ -259,6 +260,8 @@ export class RealEstateService {
         },
       });
 
+      await this.recordPublicationRevenue(tx, listing);
+
       if (images && images.length > 0) {
         await tx.realEstateListingImage.createMany({
           data: images.map((img: any, index: number) => ({
@@ -289,6 +292,8 @@ export class RealEstateService {
         data: listingData,
       });
 
+      await this.recordPublicationRevenue(tx, listing);
+
       if (images) {
         await tx.realEstateListingImage.deleteMany({
           where: { listingId: id },
@@ -313,13 +318,16 @@ export class RealEstateService {
   }
 
   async updateListingStatus(id: string, status: RealEstateStatus) {
-    return prisma.realEstateListing.update({
+    const listing = await prisma.realEstateListing.update({
       where: { id },
       data: { 
         status,
         publishedAt: status === RealEstateStatus.PUBLISHED ? new Date() : undefined,
       },
     });
+
+    await this.recordPublicationRevenue(prisma, listing);
+    return listing;
   }
 
   async softDeleteListing(id: string) {
@@ -402,6 +410,8 @@ export class RealEstateService {
           isRegistered: submission.isRegistered,
         },
       });
+
+      await this.recordPublicationRevenue(tx, listing);
 
       if (submission.images && submission.images.length > 0) {
         await tx.realEstateListingImage.createMany({
@@ -514,6 +524,42 @@ export class RealEstateService {
     ].join('\n');
 
     return `https://wa.me/${REAL_ESTATE_WHATSAPP_PHONE}?text=${encodeURIComponent(message)}`;
+  }
+
+  private async recordPublicationRevenue(
+    tx: Pick<Prisma.TransactionClient, 'platformRevenueEntry'>,
+    listing: {
+      id: string;
+      compoundId: string;
+      title: string;
+      slug: string;
+      status: RealEstateStatus;
+      publishedAt: Date | null;
+    },
+  ) {
+    if (listing.status !== RealEstateStatus.PUBLISHED) {
+      return;
+    }
+
+    const unitRate = new Prisma.Decimal(1000);
+
+    await PlatformRevenueService.recordRevenueEntry(tx, {
+      compoundId: listing.compoundId,
+      sourceType: PlatformRevenueSourceType.REAL_ESTATE_LISTING,
+      sourceId: listing.id,
+      revenueCategory: PlatformRevenueCategory.SALE_APARTMENT_LISTING,
+      amount: unitRate,
+      unitRate,
+      quantity: new Prisma.Decimal(1),
+      currency: 'EGP',
+      description: 'رسوم نشر إعلان بيع شقة',
+      occurredAt: listing.publishedAt ?? new Date(),
+      realEstateListingId: listing.id,
+      metadata: {
+        title: listing.title,
+        slug: listing.slug,
+      },
+    });
   }
 
   private formatCurrency(value: Prisma.Decimal) {
