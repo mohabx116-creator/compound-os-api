@@ -16,6 +16,9 @@ export const revenueSourceTypeValues = [
 ] as const;
 export type RevenueSourceType = (typeof revenueSourceTypeValues)[number];
 
+export const revenueEntryKindValues = ['CHARGE', 'REVERSAL'] as const;
+export type RevenueEntryKind = (typeof revenueEntryKindValues)[number];
+
 export interface RevenueDateRange {
   range: RevenueRange;
   from?: string;
@@ -31,6 +34,8 @@ export interface RecordRevenueEntryInput {
   compoundId: string;
   sourceType: RevenueSourceType;
   sourceId: string;
+  entryKind?: RevenueEntryKind;
+  reversalOfEntryId?: string | null;
   revenueCategory: RevenueCategory;
   amountEgp: number;
   unitRateEgp: number;

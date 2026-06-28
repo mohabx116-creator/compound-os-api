@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { getPaginationMeta, getPrismaPagination } from '../../common/utils/pagination.js';
 import { prisma } from '../../config/prisma.js';
 import type {
+  RevenueEntryKind,
   RecordRevenueEntryInput,
   RevenueDateRange,
   RevenueEntriesResult,
@@ -13,6 +14,33 @@ import type {
   RevenueCategory,
   RevenueSourceType,
 } from './platform-revenue.types.js';
+
+type RevenueEntryRow = {
+  id: string;
+  compound_id: string;
+  source_type: string;
+  source_id: string;
+  entry_kind: string;
+  reversal_of_entry_id: string | null;
+  revenue_category: string;
+  listing_id: string | null;
+  real_estate_listing_id: string | null;
+  reservation_id: string | null;
+  payment_id: string | null;
+  amount_egp: number;
+  unit_rate_egp: number;
+  quantity: number;
+  description: string;
+  metadata: Prisma.JsonValue | null;
+  occurred_at: Date;
+  created_at: Date;
+};
+
+const REVENUE_ENTRY_TABLE = '"platform_revenue_entries"';
+const REVENUE_ENTRY_SOURCE_UNIQUE = '"source_type", "source_id", "entry_kind"';
+const REVENUE_ENTRY_REVERSAL_UNIQUE = '"reversal_of_entry_id"';
+const CHARGE_ENTRY_KIND = 'CHARGE';
+const REVERSAL_ENTRY_KIND = 'REVERSAL';
 
 const revenueEntrySelect = {
   id: true,
@@ -77,36 +105,60 @@ const revenueCategories: RevenueCategory[] = [
 
 export class PlatformRevenueService {
   static async recordRevenueEntry(
-    tx: Pick<Prisma.TransactionClient, 'platformRevenueEntry'>,
+    tx: Pick<Prisma.TransactionClient, '$queryRaw'>,
     input: RecordRevenueEntryInput,
   ) {
-    const occurredAt = input.occurredAt ?? new Date();
+    const entryKind = input.entryKind ?? CHARGE_ENTRY_KIND;
 
-    return tx.platformRevenueEntry.upsert({
-      where: {
-        sourceType_sourceId: {
-          sourceType: input.sourceType,
-          sourceId: input.sourceId,
-        },
-      },
-      create: {
-        compoundId: input.compoundId,
-        sourceType: input.sourceType,
-        sourceId: input.sourceId,
-        revenueCategory: input.revenueCategory,
-        listingId: input.listingId ?? undefined,
-        realEstateListingId: input.realEstateListingId ?? undefined,
-        reservationId: input.reservationId ?? undefined,
-        paymentId: input.paymentId ?? undefined,
-        amountEgp: input.amountEgp,
-        unitRateEgp: input.unitRateEgp,
-        quantity: input.quantity,
-        description: input.description,
-        metadata: input.metadata ?? undefined,
-        occurredAt,
-      },
-      update: {},
-      select: revenueEntrySummarySelect,
+    return this.insertRevenueEntry(tx, {
+      ...input,
+      entryKind,
+      occurredAt: input.occurredAt ?? new Date(),
+      reversalOfEntryId: input.reversalOfEntryId ?? null,
+    });
+  }
+
+  static async reverseRevenueEntry(
+    tx: Pick<Prisma.TransactionClient, '$queryRaw'>,
+    input: {
+      compoundId: string;
+      sourceType: RevenueSourceType;
+      sourceId: string;
+      occurredAt?: Date;
+      description?: string;
+      metadata?: Prisma.InputJsonValue | null;
+    },
+  ) {
+    const originalEntry = await this.findChargeEntryBySource(tx, input.sourceType, input.sourceId);
+
+    if (!originalEntry) {
+      return null;
+    }
+
+    const existingReversal = await this.findReversalByChargeId(tx, originalEntry.id);
+    if (existingReversal) {
+      return existingReversal;
+    }
+
+    return this.insertRevenueEntry(tx, {
+      compoundId: input.compoundId,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+      entryKind: REVERSAL_ENTRY_KIND,
+      reversalOfEntryId: originalEntry.id,
+      revenueCategory: originalEntry.revenue_category as RevenueCategory,
+      amountEgp: -Number(originalEntry.amount_egp),
+      unitRateEgp: Number(originalEntry.unit_rate_egp),
+      quantity: -Number(originalEntry.quantity),
+      description:
+        input.description ??
+        `عكس قيد الإيراد المرتبط بـ ${originalEntry.description}`,
+      occurredAt: input.occurredAt ?? new Date(),
+      listingId: originalEntry.listing_id,
+      realEstateListingId: originalEntry.real_estate_listing_id,
+      reservationId: originalEntry.reservation_id,
+      paymentId: originalEntry.payment_id,
+      metadata: input.metadata ?? originalEntry.metadata,
     });
   }
 
@@ -338,6 +390,118 @@ export class PlatformRevenueService {
     });
 
     return activation?.occurredAt ?? null;
+  }
+
+  private static async insertRevenueEntry(
+    tx: Pick<Prisma.TransactionClient, '$queryRaw'>,
+    input: RecordRevenueEntryInput & {
+      entryKind: RevenueEntryKind;
+      reversalOfEntryId: string | null;
+      occurredAt: Date;
+    },
+  ) {
+    const insertedRows = await tx.$queryRaw<RevenueEntryRow[]>(Prisma.sql`
+      INSERT INTO ${Prisma.raw(REVENUE_ENTRY_TABLE)} (
+        "compound_id",
+        "source_type",
+        "source_id",
+        "entry_kind",
+        "reversal_of_entry_id",
+        "revenue_category",
+        "listing_id",
+        "real_estate_listing_id",
+        "reservation_id",
+        "payment_id",
+        "amount_egp",
+        "unit_rate_egp",
+        "quantity",
+        "description",
+        "metadata",
+        "occurred_at"
+      )
+      VALUES (
+        ${input.compoundId},
+        ${input.sourceType},
+        ${input.sourceId},
+        ${input.entryKind},
+        ${input.reversalOfEntryId},
+        ${input.revenueCategory},
+        ${input.listingId ?? null},
+        ${input.realEstateListingId ?? null},
+        ${input.reservationId ?? null},
+        ${input.paymentId ?? null},
+        ${input.amountEgp},
+        ${input.unitRateEgp},
+        ${input.quantity},
+        ${input.description},
+        ${input.metadata == null ? null : JSON.stringify(input.metadata)}::jsonb,
+        ${input.occurredAt}
+      )
+      ON CONFLICT (${Prisma.raw(
+        input.entryKind === REVERSAL_ENTRY_KIND
+          ? REVENUE_ENTRY_REVERSAL_UNIQUE
+          : REVENUE_ENTRY_SOURCE_UNIQUE,
+      )})
+      DO NOTHING
+      RETURNING *
+    `);
+
+    if (insertedRows.length > 0) {
+      return insertedRows[0];
+    }
+
+    if (input.entryKind === REVERSAL_ENTRY_KIND) {
+      const existingRows = await tx.$queryRaw<RevenueEntryRow[]>(Prisma.sql`
+        SELECT *
+        FROM ${Prisma.raw(REVENUE_ENTRY_TABLE)}
+        WHERE "reversal_of_entry_id" = ${input.reversalOfEntryId}
+        LIMIT 1
+      `);
+
+      return existingRows[0] ?? null;
+    }
+
+    const existingRows = await tx.$queryRaw<RevenueEntryRow[]>(Prisma.sql`
+      SELECT *
+      FROM ${Prisma.raw(REVENUE_ENTRY_TABLE)}
+      WHERE "source_type" = ${input.sourceType}
+        AND "source_id" = ${input.sourceId}
+        AND "entry_kind" = ${input.entryKind}
+      LIMIT 1
+    `);
+
+    return existingRows[0] ?? null;
+  }
+
+  private static async findChargeEntryBySource(
+    tx: Pick<Prisma.TransactionClient, '$queryRaw'>,
+    sourceType: RevenueSourceType,
+    sourceId: string,
+  ) {
+    const rows = await tx.$queryRaw<RevenueEntryRow[]>(Prisma.sql`
+      SELECT *
+      FROM ${Prisma.raw(REVENUE_ENTRY_TABLE)}
+      WHERE "source_type" = ${sourceType}
+        AND "source_id" = ${sourceId}
+        AND "entry_kind" = ${CHARGE_ENTRY_KIND}
+      LIMIT 1
+    `);
+
+    return rows[0] ?? null;
+  }
+
+  private static async findReversalByChargeId(
+    tx: Pick<Prisma.TransactionClient, '$queryRaw'>,
+    chargeEntryId: string,
+  ) {
+    const rows = await tx.$queryRaw<RevenueEntryRow[]>(Prisma.sql`
+      SELECT *
+      FROM ${Prisma.raw(REVENUE_ENTRY_TABLE)}
+      WHERE "reversal_of_entry_id" = ${chargeEntryId}
+      LIMIT 1
+    `);
+
+    return rows[0] ?? null;
   }
 
   private static toEntryListItem(

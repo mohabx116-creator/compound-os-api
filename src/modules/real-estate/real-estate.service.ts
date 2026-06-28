@@ -330,11 +330,30 @@ export class RealEstateService {
     return listing;
   }
 
-  async softDeleteListing(id: string) {
-    // Safe delete by hiding it instead of destructive delete
-    return prisma.realEstateListing.update({
-      where: { id },
-      data: { status: RealEstateStatus.HIDDEN },
+  async softDeleteListing(id: string, options: { reverseRevenue?: boolean } = {}) {
+    const listing = await this.getAdminListingById(id);
+
+    if (!listing) {
+      throw new Error('Listing not found');
+    }
+
+    return prisma.$transaction(async (tx) => {
+      const updatedListing = await tx.realEstateListing.update({
+        where: { id },
+        data: { status: RealEstateStatus.HIDDEN },
+      });
+
+      if (options.reverseRevenue) {
+        await PlatformRevenueService.reverseRevenueEntry(tx, {
+          compoundId: listing.compoundId,
+          sourceType: 'REAL_ESTATE_LISTING',
+          sourceId: listing.id,
+          occurredAt: new Date(),
+          description: 'عكس رسوم نشر إعلان البيع بعد الحذف',
+        });
+      }
+
+      return updatedListing;
     });
   }
 
@@ -527,7 +546,7 @@ export class RealEstateService {
   }
 
   private async recordPublicationRevenue(
-    tx: Pick<Prisma.TransactionClient, 'platformRevenueEntry'>,
+    tx: Pick<Prisma.TransactionClient, '$queryRaw'>,
     listing: {
       id: string;
       compoundId: string;

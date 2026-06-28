@@ -3289,16 +3289,33 @@ export class RentalService {
     return this.addAvailableBeds(updated);
   }
 
-  static async deleteAdminListing(id: RentalIdParams['id']) {
-    await this.getAdminListingById(id);
+  static async deleteAdminListing(
+    id: RentalIdParams['id'],
+    options: { reverseRevenue?: boolean } = {},
+  ) {
+    const listing = await this.getAdminListingById(id);
 
-    const updated = await prisma.rentalListing.update({
-      where: { id },
-      data: {
-        status: RentalListingStatus.REMOVED,
-        isPublished: false,
-      },
-      include: adminListingInclude,
+    const updated = await prisma.$transaction(async (tx) => {
+      const updatedListing = await tx.rentalListing.update({
+        where: { id },
+        data: {
+          status: RentalListingStatus.REMOVED,
+          isPublished: false,
+        },
+        include: adminListingInclude,
+      });
+
+      if (options.reverseRevenue) {
+        await PlatformRevenueService.reverseRevenueEntry(tx, {
+          compoundId: listing.compoundId,
+          sourceType: 'RENTAL_LISTING',
+          sourceId: listing.id,
+          occurredAt: new Date(),
+          description: 'عكس رسوم نشر إعلان الإيجار بعد الحذف',
+        });
+      }
+
+      return updatedListing;
     });
     clearPublicRentalReadCaches();
     return this.addAvailableBeds(updated);

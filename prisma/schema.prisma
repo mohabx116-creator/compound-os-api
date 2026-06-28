@@ -609,6 +609,8 @@ model PlatformRevenueEntry {
   compound            Compound         @relation(fields: [compoundId], references: [id], onDelete: Cascade)
   sourceType          String           @map("source_type")
   sourceId            String           @map("source_id")
+  entryKind           String           @default("CHARGE") @map("entry_kind")
+  reversalOfEntryId   String?          @unique @map("reversal_of_entry_id")
   revenueCategory     String           @map("revenue_category")
   listingId           String?          @map("listing_id")
   listing             RentalListing?   @relation(fields: [listingId], references: [id], onDelete: SetNull)
@@ -626,7 +628,7 @@ model PlatformRevenueEntry {
   occurredAt          DateTime         @default(now()) @map("occurred_at")
   createdAt           DateTime         @default(now()) @map("created_at")
 
-  @@unique([sourceType, sourceId])
+  @@unique([sourceType, sourceId, entryKind])
   @@index([compoundId])
   @@index([listingId])
   @@index([realEstateListingId])

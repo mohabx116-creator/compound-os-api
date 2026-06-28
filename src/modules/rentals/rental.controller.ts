@@ -1,4 +1,6 @@
 import { Request, Response } from 'express';
+import { AppError } from '../../common/errors/AppError.js';
+import { ErrorCodes } from '../../common/errors/error-codes.js';
 import { successResponse } from '../../common/utils/api-response.js';
 import { asyncHandler } from '../../common/utils/async-handler.js';
 import { RentalPaymentService } from './rental-payment.service.js';
@@ -519,7 +521,13 @@ export class RentalController {
 
   static deleteAdminListing = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params as unknown as RentalIdParams;
-    const listing = await RentalService.deleteAdminListing(id);
+    const reverseRevenue = req.query.reverseRevenue === 'true' || req.query.reverseRevenue === '1';
+    if (reverseRevenue && !req.auth?.isPlatformOwner) {
+      throw new AppError('Forbidden', 403, ErrorCodes.FORBIDDEN);
+    }
+    const listing = await RentalService.deleteAdminListing(id, {
+      reverseRevenue,
+    });
 
     successResponse({
       res,

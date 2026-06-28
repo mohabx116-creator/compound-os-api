@@ -64,7 +64,13 @@ export const updateAdminListingStatus = async (req: Request, res: Response) => {
 
 export const softDeleteAdminListing = async (req: Request, res: Response) => {
   try {
-    const listing = await realEstateService.softDeleteListing(req.params.id);
+    const reverseRevenue = req.query.reverseRevenue === 'true' || req.query.reverseRevenue === '1';
+    if (reverseRevenue && !req.auth?.isPlatformOwner) {
+      return res.status(403).json({ success: false, message: 'Forbidden' });
+    }
+    const listing = await realEstateService.softDeleteListing(req.params.id, {
+      reverseRevenue,
+    });
     res.json({ success: true, message: 'Admin real estate listing hidden successfully', data: listing });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
