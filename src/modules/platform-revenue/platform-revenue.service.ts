@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { getPaginationMeta, getPrismaPagination } from '../../common/utils/pagination.js';
 import { prisma } from '../../config/prisma.js';
@@ -395,13 +396,17 @@ export class PlatformRevenueService {
   private static async insertRevenueEntry(
     tx: Pick<Prisma.TransactionClient, '$queryRaw'>,
     input: RecordRevenueEntryInput & {
+      id?: string;
       entryKind: RevenueEntryKind;
       reversalOfEntryId: string | null;
       occurredAt: Date;
     },
   ) {
+    const entryId = input.id ?? randomUUID();
+
     const insertedRows = await tx.$queryRaw<RevenueEntryRow[]>(Prisma.sql`
       INSERT INTO ${Prisma.raw(REVENUE_ENTRY_TABLE)} (
+        "id",
         "compound_id",
         "source_type",
         "source_id",
@@ -420,6 +425,7 @@ export class PlatformRevenueService {
         "occurred_at"
       )
       VALUES (
+        ${entryId},
         ${input.compoundId},
         ${input.sourceType},
         ${input.sourceId},

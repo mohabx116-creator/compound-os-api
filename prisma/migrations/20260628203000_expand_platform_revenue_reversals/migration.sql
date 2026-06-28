@@ -11,6 +11,7 @@ CREATE UNIQUE INDEX "platform_revenue_entries_reversal_of_entry_id_key"
   ON "platform_revenue_entries"("reversal_of_entry_id");
 
 INSERT INTO "platform_revenue_entries" (
+  "id",
   "compound_id",
   "source_type",
   "source_id",
@@ -29,6 +30,7 @@ INSERT INTO "platform_revenue_entries" (
   "created_at"
 )
 SELECT
+  'baseline:rental_listing:' || rl."id" || ':charge',
   rl."compound_id",
   'RENTAL_LISTING',
   rl."id",
@@ -68,6 +70,7 @@ WHERE rl."status" = 'ACTIVE'
 ON CONFLICT ("source_type", "source_id", "entry_kind") DO NOTHING;
 
 INSERT INTO "platform_revenue_entries" (
+  "id",
   "compound_id",
   "source_type",
   "source_id",
@@ -86,6 +89,7 @@ INSERT INTO "platform_revenue_entries" (
   "created_at"
 )
 SELECT
+  'baseline:real_estate_listing:' || rel."id" || ':charge',
   rel."compound_id",
   'REAL_ESTATE_LISTING',
   rel."id",
