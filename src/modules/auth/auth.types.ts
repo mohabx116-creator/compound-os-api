@@ -14,6 +14,7 @@ export interface AuthTokenPayload {
   role: string;
   compoundId: string;
   unitId?: string | null;
+  isPlatformOwner?: boolean;
   type: 'access';
 }
 
@@ -24,6 +25,7 @@ export interface AuthUser {
   email: string | null;
   role: string;
   status: string;
+  isPlatformOwner: boolean;
   compoundId: string;
   unitId: string | null;
   compound: {

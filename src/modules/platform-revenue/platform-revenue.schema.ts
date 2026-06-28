@@ -1,13 +1,16 @@
-import { PlatformRevenueCategory, PlatformRevenueSourceType } from '@prisma/client';
 import { z } from 'zod';
-import { revenueRangeValues } from './platform-revenue.types.js';
+import {
+  revenueCategoryValues,
+  revenueRangeValues,
+  revenueSourceTypeValues,
+} from './platform-revenue.types.js';
 
 const revenueRangeSchema = z.enum(revenueRangeValues);
-const revenueCategorySchema = z.nativeEnum(PlatformRevenueCategory);
-const revenueSourceTypeSchema = z.nativeEnum(PlatformRevenueSourceType);
+const revenueCategorySchema = z.enum(revenueCategoryValues);
+const revenueSourceTypeSchema = z.enum(revenueSourceTypeValues);
 
 export const revenueSummaryQuerySchema = z.object({
-  range: revenueRangeSchema.default('MONTH'),
+  range: revenueRangeSchema.default('ALL'),
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
   revenueCategory: revenueCategorySchema.optional(),

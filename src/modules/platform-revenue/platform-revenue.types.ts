@@ -1,8 +1,20 @@
-import type { PlatformRevenueCategory, PlatformRevenueSourceType, Prisma } from '@prisma/client';
-import type { PaginationMeta } from '../../common/utils/pagination.js';
-
-export const revenueRangeValues = ['TODAY', 'MONTH', 'YEAR', 'ALL', 'CUSTOM'] as const;
+export const revenueRangeValues = ['MONTH', 'YEAR', 'ALL', 'CUSTOM'] as const;
 export type RevenueRange = (typeof revenueRangeValues)[number];
+
+export const revenueCategoryValues = [
+  'RENTAL_STANDARD_LISTING',
+  'RENTAL_FEATURED_LISTING',
+  'BED_RENTAL',
+  'SALE_APARTMENT_LISTING',
+] as const;
+export type RevenueCategory = (typeof revenueCategoryValues)[number];
+
+export const revenueSourceTypeValues = [
+  'RENTAL_LISTING',
+  'RENTAL_RESERVATION',
+  'REAL_ESTATE_LISTING',
+] as const;
+export type RevenueSourceType = (typeof revenueSourceTypeValues)[number];
 
 export interface RevenueDateRange {
   range: RevenueRange;
@@ -17,13 +29,12 @@ export interface RevenueWindow {
 
 export interface RecordRevenueEntryInput {
   compoundId: string;
-  sourceType: PlatformRevenueSourceType;
+  sourceType: RevenueSourceType;
   sourceId: string;
-  revenueCategory: PlatformRevenueCategory;
-  amount: Prisma.Decimal;
-  unitRate: Prisma.Decimal;
-  quantity: Prisma.Decimal;
-  currency: string;
+  revenueCategory: RevenueCategory;
+  amountEgp: number;
+  unitRateEgp: number;
+  quantity: number;
   description: string;
   occurredAt?: Date;
   listingId?: string | null;
@@ -35,33 +46,31 @@ export interface RecordRevenueEntryInput {
 
 export interface RevenueEntryListItem {
   id: string;
-  sourceType: PlatformRevenueSourceType;
+  sourceType: RevenueSourceType;
   sourceId: string;
-  revenueCategory: PlatformRevenueCategory;
-  amount: number;
-  unitRate: number;
+  revenueCategory: RevenueCategory;
+  amountEgp: number;
+  unitRateEgp: number;
   quantity: number;
-  currency: string;
-  description: string;
   occurredAt: string;
   createdAt: string;
   sourceReference: string;
-  listing: {
+  listing?: {
     id: string;
     title: string;
     slug: string;
   } | null;
-  realEstateListing: {
+  realEstateListing?: {
     id: string;
     title: string;
     slug: string;
   } | null;
-  reservation: {
+  reservation?: {
     id: string;
     tenantName: string;
     status: string;
   } | null;
-  payment: {
+  payment?: {
     id: string;
     purpose: string;
     status: string;
@@ -70,28 +79,35 @@ export interface RevenueEntryListItem {
 
 export interface RevenueEntriesResult {
   entries: RevenueEntryListItem[];
-  meta: PaginationMeta;
+  meta: {
+    page: number;
+    limit: number;
+    totalCount: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
 }
 
 export interface RevenueSummaryBucket {
-  amount: number;
+  amountEgp: number;
   count: number;
   quantity: number;
 }
 
-export interface RevenueMonthlyBucket {
+export interface RevenueMonthlyBucket extends RevenueSummaryBucket {
   month: string;
-  amount: number;
-  count: number;
-  quantity: number;
 }
 
 export interface RevenueSummaryResult {
-  filters: RevenueDateRange & RevenueWindow;
+  activationAt: string | null;
+  filters: RevenueDateRange & {
+    startAt: string | null;
+    endAt: string | null;
+  };
   totals: RevenueSummaryBucket;
-  byCategory: Array<RevenueSummaryBucket & { revenueCategory: PlatformRevenueCategory }>;
+  byCategory: Array<RevenueSummaryBucket & { revenueCategory: RevenueCategory }>;
   monthlyAggregation: RevenueMonthlyBucket[];
   recentEntries: RevenueEntryListItem[];
 }
-
-export type RevenueEntrySelect = Prisma.PlatformRevenueEntrySelect;
+import type { Prisma } from '@prisma/client';

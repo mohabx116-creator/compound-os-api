@@ -12,6 +12,12 @@ router.get(
 );
 
 router.get(
+  '/monthly',
+  validate({ query: revenueSummaryQuerySchema }),
+  AdminRevenueController.getMonthlyRevenue,
+);
+
+router.get(
   '/entries',
   validate({ query: revenueEntriesQuerySchema }),
   AdminRevenueController.listRevenueEntries,

@@ -44,6 +44,7 @@ export function verifyAccessToken(token: string): AuthTokenPayload {
       role: decoded.role,
       compoundId: decoded.compoundId,
       unitId: typeof decoded.unitId === 'string' ? decoded.unitId : null,
+      isPlatformOwner: typeof decoded.isPlatformOwner === 'boolean' ? decoded.isPlatformOwner : false,
       type: 'access',
     };
   } catch (error) {

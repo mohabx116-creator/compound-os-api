@@ -5,7 +5,7 @@ import { unitRoutes } from '../modules/units/unit.routes.js';
 import { residentRoutes } from '../modules/residents/resident.routes.js';
 import { complaintRoutes } from '../modules/complaints/complaint.routes.js';
 import { authRoutes } from '../modules/auth/auth.routes.js';
-import { requireAdminRole, requireAuth, requireOwnerRole } from '../modules/auth/auth.middleware.js';
+import { requireAdminRole, requireAuth, requirePlatformOwner } from '../modules/auth/auth.middleware.js';
 import { serviceCategoryRoutes } from '../modules/service-categories/service-category.routes.js';
 import { serviceProviderRoutes } from '../modules/service-providers/service-provider.routes.js';
 import { servicesRoutes } from '../modules/services/services.routes.js';
@@ -40,6 +40,6 @@ router.use('/admin/notifications', requireAuth, requireAdminRole, adminNotificat
 router.use('/admin/dashboard', requireAuth, requireAdminRole, adminDashboardRoutes);
 router.use('/admin/settings', requireAuth, requireAdminRole, adminSettingsRoutes);
 router.use('/admin/real-estate', requireAuth, requireAdminRole, adminRealEstateRoutes);
-router.use('/admin/revenue', requireAuth, requireOwnerRole, adminRevenueRoutes);
+router.use('/admin/revenue', requireAuth, requirePlatformOwner, adminRevenueRoutes);
 
 export const apiRoutes = router;

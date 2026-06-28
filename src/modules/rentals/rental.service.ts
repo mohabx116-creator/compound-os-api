@@ -1,8 +1,6 @@
 import {
   AdminNotificationEntityType,
   AdminNotificationEventType,
-  PlatformRevenueCategory,
-  PlatformRevenueSourceType,
   Prisma,
   RentalInquiryStatus,
   RentalFurnishingStatus,
@@ -4050,19 +4048,18 @@ export class RentalService {
     }
 
     const revenueCategory = listing.isFeatured
-      ? PlatformRevenueCategory.RENTAL_FEATURED_LISTING
-      : PlatformRevenueCategory.RENTAL_STANDARD_LISTING;
-    const unitRate = listing.isFeatured ? new Prisma.Decimal(750) : new Prisma.Decimal(500);
+      ? 'RENTAL_FEATURED_LISTING'
+      : 'RENTAL_STANDARD_LISTING';
+    const unitRateEgp = listing.isFeatured ? 750 : 500;
 
     await PlatformRevenueService.recordRevenueEntry(tx, {
       compoundId: listing.compoundId,
-      sourceType: PlatformRevenueSourceType.RENTAL_LISTING,
+      sourceType: 'RENTAL_LISTING',
       sourceId: listing.id,
       revenueCategory,
-      amount: unitRate,
-      unitRate,
-      quantity: new Prisma.Decimal(1),
-      currency: RENTAL_POLICY.currency,
+      amountEgp: unitRateEgp,
+      unitRateEgp,
+      quantity: 1,
       description: listing.isFeatured
         ? 'رسوم نشر إعلان إيجار مميز'
         : 'رسوم نشر إعلان إيجار عادي',
@@ -4087,26 +4084,25 @@ export class RentalService {
       quantity: number;
     },
   ) {
-    const quantity = new Prisma.Decimal(input.quantity > 0 ? input.quantity : 1);
-    const unitRate = new Prisma.Decimal(200);
-    const amount = unitRate.mul(quantity);
+    const quantity = input.quantity > 0 ? input.quantity : 1;
+    const unitRateEgp = 200;
+    const amountEgp = unitRateEgp * quantity;
 
     await PlatformRevenueService.recordRevenueEntry(tx, {
       compoundId: input.compoundId,
-      sourceType: PlatformRevenueSourceType.RENTAL_RESERVATION,
+      sourceType: 'RENTAL_RESERVATION',
       sourceId: input.reservationId,
-      revenueCategory: PlatformRevenueCategory.BED_RENTAL,
-      amount,
-      unitRate,
+      revenueCategory: 'BED_RENTAL',
+      amountEgp,
+      unitRateEgp,
       quantity,
-      currency: RENTAL_POLICY.currency,
       description: 'إيراد تأجير سرير مؤكد',
       occurredAt: input.occurredAt,
       listingId: input.listingId,
       reservationId: input.reservationId,
       paymentId: input.paymentId ?? null,
       metadata: {
-        quantity: quantity.toString(),
+        quantity,
       },
     });
   }

@@ -89,19 +89,6 @@ enum RentalPaymentPurpose {
   OWNER_PAYOUT
 }
 
-enum PlatformRevenueSourceType {
-  RENTAL_LISTING
-  RENTAL_RESERVATION
-  REAL_ESTATE_LISTING
-}
-
-enum PlatformRevenueCategory {
-  RENTAL_STANDARD_LISTING
-  RENTAL_FEATURED_LISTING
-  BED_RENTAL
-  SALE_APARTMENT_LISTING
-}
-
 enum RentalPaymentStatus {
   INITIATED
   PENDING
@@ -236,6 +223,7 @@ model Resident {
   failedLoginAttempts Int            @default(0) @map("failed_login_attempts")
   lockedUntil         DateTime?      @map("locked_until")
   isEmailVerified     Boolean        @default(false) @map("is_email_verified")
+  isPlatformOwner     Boolean        @default(false) @map("is_platform_owner")
   createdAt           DateTime       @default(now()) @map("created_at")
   updatedAt           DateTime       @updatedAt @map("updated_at")
 
@@ -616,28 +604,27 @@ model RentalPlatformLedgerEntry {
 }
 
 model PlatformRevenueEntry {
-  id                  String                   @id @default(uuid())
-  compoundId          String                   @map("compound_id")
-  compound            Compound                 @relation(fields: [compoundId], references: [id], onDelete: Cascade)
-  sourceType          PlatformRevenueSourceType @map("source_type")
-  sourceId            String                   @map("source_id")
-  revenueCategory     PlatformRevenueCategory   @map("revenue_category")
-  listingId           String?                  @map("listing_id")
-  listing             RentalListing?           @relation(fields: [listingId], references: [id], onDelete: SetNull)
-  realEstateListingId String?                  @map("real_estate_listing_id")
-  realEstateListing   RealEstateListing?       @relation(fields: [realEstateListingId], references: [id], onDelete: SetNull)
-  reservationId       String?                  @map("reservation_id")
-  reservation         RentalReservation?       @relation(fields: [reservationId], references: [id], onDelete: SetNull)
-  paymentId           String?                  @map("payment_id")
-  payment             RentalPayment?           @relation(fields: [paymentId], references: [id], onDelete: SetNull)
-  amount              Decimal                  @db.Decimal(12, 2)
-  unitRate            Decimal                  @map("unit_rate") @db.Decimal(12, 2)
-  quantity            Decimal                  @db.Decimal(12, 2)
-  currency            String                   @default("EGP")
+  id                  String           @id @default(uuid())
+  compoundId          String           @map("compound_id")
+  compound            Compound         @relation(fields: [compoundId], references: [id], onDelete: Cascade)
+  sourceType          String           @map("source_type")
+  sourceId            String           @map("source_id")
+  revenueCategory     String           @map("revenue_category")
+  listingId           String?          @map("listing_id")
+  listing             RentalListing?   @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  realEstateListingId String?          @map("real_estate_listing_id")
+  realEstateListing   RealEstateListing? @relation(fields: [realEstateListingId], references: [id], onDelete: SetNull)
+  reservationId       String?          @map("reservation_id")
+  reservation         RentalReservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  paymentId           String?          @map("payment_id")
+  payment             RentalPayment?   @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  amountEgp           Int              @map("amount_egp")
+  unitRateEgp         Int              @map("unit_rate_egp")
+  quantity            Int
   description         String
   metadata            Json?
-  occurredAt          DateTime                 @default(now()) @map("occurred_at")
-  createdAt           DateTime                 @default(now()) @map("created_at")
+  occurredAt          DateTime         @default(now()) @map("occurred_at")
+  createdAt           DateTime         @default(now()) @map("created_at")
 
   @@unique([sourceType, sourceId])
   @@index([compoundId])

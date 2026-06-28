@@ -29,6 +29,7 @@ const authResidentSelect = Prisma.validator<Prisma.ResidentSelect>()({
   passwordHash: true,
   role: true,
   status: true,
+  isPlatformOwner: true,
   failedLoginAttempts: true,
   lockedUntil: true,
   compound: {
@@ -169,6 +170,7 @@ export class AuthService {
       role: resident.role,
       compoundId: resident.compoundId,
       unitId: resident.unitId,
+      isPlatformOwner: resident.isPlatformOwner,
       type: 'access',
     });
 
@@ -216,6 +218,7 @@ export class AuthService {
       email: resident.email,
       role: resident.role,
       status: resident.status,
+      isPlatformOwner: resident.isPlatformOwner,
       compoundId: resident.compoundId,
       unitId: resident.unitId,
       compound: {

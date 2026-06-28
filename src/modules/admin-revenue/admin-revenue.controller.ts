@@ -31,6 +31,19 @@ export class AdminRevenueController {
     });
   });
 
+  static getMonthlyRevenue = asyncHandler(async (req: Request, res: Response) => {
+    const compoundId = this.getCompoundId(req);
+    const query: RevenueDateRange = revenueSummaryQuerySchema.parse(req.query);
+
+    const monthly = await PlatformRevenueService.getMonthlySummary(compoundId, query);
+
+    successResponse({
+      res,
+      message: 'Monthly revenue aggregation retrieved successfully',
+      data: monthly,
+    });
+  });
+
   static listRevenueEntries = asyncHandler(async (req: Request, res: Response) => {
     const compoundId = this.getCompoundId(req);
     const query = revenueEntriesQuerySchema.parse(req.query) as RevenueDateRange & {

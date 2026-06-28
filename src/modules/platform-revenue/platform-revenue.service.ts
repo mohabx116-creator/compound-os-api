@@ -1,10 +1,4 @@
-import {
-  PlatformRevenueCategory,
-  PlatformRevenueSourceType,
-  Prisma,
-} from '@prisma/client';
-import { AppError } from '../../common/errors/AppError.js';
-import { ErrorCodes } from '../../common/errors/error-codes.js';
+import { Prisma } from '@prisma/client';
 import { getPaginationMeta, getPrismaPagination } from '../../common/utils/pagination.js';
 import { prisma } from '../../config/prisma.js';
 import type {
@@ -16,6 +10,8 @@ import type {
   RevenueSummaryBucket,
   RevenueSummaryResult,
   RevenueWindow,
+  RevenueCategory,
+  RevenueSourceType,
 } from './platform-revenue.types.js';
 
 const revenueEntrySelect = {
@@ -23,10 +19,9 @@ const revenueEntrySelect = {
   sourceType: true,
   sourceId: true,
   revenueCategory: true,
-  amount: true,
-  unitRate: true,
+  amountEgp: true,
+  unitRateEgp: true,
   quantity: true,
-  currency: true,
   description: true,
   occurredAt: true,
   createdAt: true,
@@ -65,14 +60,20 @@ const revenueEntrySummarySelect = {
   sourceType: true,
   sourceId: true,
   revenueCategory: true,
-  amount: true,
-  unitRate: true,
+  amountEgp: true,
+  unitRateEgp: true,
   quantity: true,
-  currency: true,
   description: true,
   occurredAt: true,
   createdAt: true,
 } satisfies Prisma.PlatformRevenueEntrySelect;
+
+const revenueCategories: RevenueCategory[] = [
+  'RENTAL_STANDARD_LISTING',
+  'RENTAL_FEATURED_LISTING',
+  'BED_RENTAL',
+  'SALE_APARTMENT_LISTING',
+];
 
 export class PlatformRevenueService {
   static async recordRevenueEntry(
@@ -97,10 +98,9 @@ export class PlatformRevenueService {
         realEstateListingId: input.realEstateListingId ?? undefined,
         reservationId: input.reservationId ?? undefined,
         paymentId: input.paymentId ?? undefined,
-        amount: input.amount,
-        unitRate: input.unitRate,
+        amountEgp: input.amountEgp,
+        unitRateEgp: input.unitRateEgp,
         quantity: input.quantity,
-        currency: input.currency,
         description: input.description,
         metadata: input.metadata ?? undefined,
         occurredAt,
@@ -117,22 +117,18 @@ export class PlatformRevenueService {
     const window = this.resolveWindow(query);
     const where = this.buildWhere(compoundId, query, window);
 
-    const [
-      totalsAggregate,
-      categoryBuckets,
-      monthlyAggregation,
-      recentEntries,
-    ] = await Promise.all([
+    const [activationAt, totalsAggregate, categoryBuckets, monthlyAggregation, recentEntries] = await Promise.all([
+      this.getActivationAt(compoundId),
       prisma.platformRevenueEntry.aggregate({
         where,
         _count: { _all: true },
-        _sum: { amount: true, quantity: true },
+        _sum: { amountEgp: true, quantity: true },
       }),
       prisma.platformRevenueEntry.groupBy({
         by: ['revenueCategory'],
         where,
         _count: { _all: true },
-        _sum: { amount: true, quantity: true },
+        _sum: { amountEgp: true, quantity: true },
       }),
       this.getMonthlyAggregation(where),
       prisma.platformRevenueEntry.findMany({
@@ -144,19 +140,42 @@ export class PlatformRevenueService {
     ]);
 
     return {
+      activationAt: activationAt?.toISOString() ?? null,
       filters: {
         ...query,
-        startAt: window.startAt,
-        endAt: window.endAt,
+        startAt: window.startAt?.toISOString() ?? null,
+        endAt: window.endAt?.toISOString() ?? null,
       },
       totals: {
-        amount: Number(totalsAggregate._sum.amount ?? 0),
+        amountEgp: Number(totalsAggregate._sum.amountEgp ?? 0),
         count: totalsAggregate._count._all ?? 0,
         quantity: Number(totalsAggregate._sum.quantity ?? 0),
       },
       byCategory: this.normalizeCategoryBuckets(categoryBuckets),
       monthlyAggregation,
       recentEntries: recentEntries.map((entry) => this.toEntryListItem(entry)),
+    };
+  }
+
+  static async getMonthlySummary(
+    compoundId: string,
+    query: RevenueDateRange,
+  ): Promise<Pick<RevenueSummaryResult, 'activationAt' | 'filters' | 'monthlyAggregation'>> {
+    const window = this.resolveWindow(query);
+    const where = this.buildWhere(compoundId, query, window);
+    const [activationAt, monthlyAggregation] = await Promise.all([
+      this.getActivationAt(compoundId),
+      this.getMonthlyAggregation(where),
+    ]);
+
+    return {
+      activationAt: activationAt?.toISOString() ?? null,
+      filters: {
+        ...query,
+        startAt: window.startAt?.toISOString() ?? null,
+        endAt: window.endAt?.toISOString() ?? null,
+      },
+      monthlyAggregation,
     };
   }
 
@@ -185,7 +204,7 @@ export class PlatformRevenueService {
 
   private static buildWhere(
     compoundId: string,
-    query: RevenueDateRange & { revenueCategory?: PlatformRevenueCategory; sourceType?: PlatformRevenueSourceType },
+    query: RevenueDateRange & { revenueCategory?: RevenueCategory; sourceType?: RevenueSourceType },
     window: RevenueWindow,
   ): Prisma.PlatformRevenueEntryWhereInput {
     const where: Prisma.PlatformRevenueEntryWhereInput = { compoundId };
@@ -210,15 +229,10 @@ export class PlatformRevenueService {
 
   private static resolveWindow(query: RevenueDateRange): RevenueWindow {
     const now = new Date();
-    const startOfDay = new Date(now);
-    startOfDay.setHours(0, 0, 0, 0);
-
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfYear = new Date(now.getFullYear(), 0, 1);
 
     switch (query.range) {
-      case 'TODAY':
-        return { startAt: startOfDay, endAt: new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000) };
       case 'MONTH':
         return { startAt: startOfMonth, endAt: now };
       case 'YEAR':
@@ -236,29 +250,24 @@ export class PlatformRevenueService {
 
   private static normalizeCategoryBuckets(
     buckets: Array<{
-      revenueCategory: PlatformRevenueCategory;
+      revenueCategory: string;
       _count: { _all: number };
-      _sum: { amount: Prisma.Decimal | null; quantity: Prisma.Decimal | null };
+      _sum: { amountEgp: number | null; quantity: number | null };
     }>,
-  ): Array<RevenueSummaryBucket & { revenueCategory: PlatformRevenueCategory }> {
-    const bucketMap = new Map<PlatformRevenueCategory, RevenueSummaryBucket>();
+  ): Array<RevenueSummaryBucket & { revenueCategory: RevenueCategory }> {
+    const bucketMap = new Map<string, RevenueSummaryBucket>();
 
     for (const bucket of buckets) {
       bucketMap.set(bucket.revenueCategory, {
-        amount: Number(bucket._sum.amount ?? 0),
+        amountEgp: Number(bucket._sum.amountEgp ?? 0),
         count: bucket._count._all ?? 0,
         quantity: Number(bucket._sum.quantity ?? 0),
       });
     }
 
-    return [
-      PlatformRevenueCategory.RENTAL_STANDARD_LISTING,
-      PlatformRevenueCategory.RENTAL_FEATURED_LISTING,
-      PlatformRevenueCategory.BED_RENTAL,
-      PlatformRevenueCategory.SALE_APARTMENT_LISTING,
-    ].map((revenueCategory) => ({
+    return revenueCategories.map((revenueCategory) => ({
       revenueCategory,
-      ...(bucketMap.get(revenueCategory) ?? { amount: 0, count: 0, quantity: 0 }),
+      ...(bucketMap.get(revenueCategory) ?? { amountEgp: 0, count: 0, quantity: 0 }),
     }));
   }
 
@@ -267,15 +276,15 @@ export class PlatformRevenueService {
   ): Promise<RevenueMonthlyBucket[]> {
     const monthRows = await prisma.$queryRaw<Array<{
       month: Date;
-      amount: Prisma.Decimal | null;
+      amount_egp: bigint | number | null;
       count: bigint | number;
-      quantity: Prisma.Decimal | null;
+      quantity: bigint | number | null;
     }>>`
       SELECT
         date_trunc('month', "occurred_at") AS month,
         COUNT(*)::bigint AS count,
-        COALESCE(SUM("amount"), 0) AS amount,
-        COALESCE(SUM("quantity"), 0) AS quantity
+        COALESCE(SUM("amount_egp"), 0)::bigint AS amount_egp,
+        COALESCE(SUM("quantity"), 0)::bigint AS quantity
       FROM "platform_revenue_entries"
       WHERE ${this.buildMonthlyWhereSql(where)}
       GROUP BY 1
@@ -284,7 +293,7 @@ export class PlatformRevenueService {
 
     return monthRows.map((row) => ({
       month: row.month.toISOString().slice(0, 10),
-      amount: Number(row.amount ?? 0),
+      amountEgp: Number(row.amount_egp ?? 0),
       count: Number(row.count ?? 0),
       quantity: Number(row.quantity ?? 0),
     }));
@@ -321,6 +330,16 @@ export class PlatformRevenueService {
     return conditions.reduce((acc, condition) => Prisma.sql`${acc} AND ${condition}`);
   }
 
+  private static async getActivationAt(compoundId: string): Promise<Date | null> {
+    const activation = await prisma.platformRevenueEntry.findFirst({
+      where: { compoundId },
+      orderBy: { occurredAt: 'asc' },
+      select: { occurredAt: true },
+    });
+
+    return activation?.occurredAt ?? null;
+  }
+
   private static toEntryListItem(
     entry: Prisma.PlatformRevenueEntryGetPayload<{ select: typeof revenueEntrySelect }>,
   ): RevenueEntryListItem {
@@ -332,14 +351,12 @@ export class PlatformRevenueService {
 
     return {
       id: entry.id,
-      sourceType: entry.sourceType,
+      sourceType: entry.sourceType as RevenueSourceType,
       sourceId: entry.sourceId,
-      revenueCategory: entry.revenueCategory,
-      amount: Number(entry.amount),
-      unitRate: Number(entry.unitRate),
+      revenueCategory: entry.revenueCategory as RevenueCategory,
+      amountEgp: Number(entry.amountEgp),
+      unitRateEgp: Number(entry.unitRateEgp),
       quantity: Number(entry.quantity),
-      currency: entry.currency,
-      description: entry.description,
       occurredAt: entry.occurredAt.toISOString(),
       createdAt: entry.createdAt.toISOString(),
       sourceReference,
@@ -373,7 +390,4 @@ export class PlatformRevenueService {
         : null,
     };
   }
-
 }
-
-export { PlatformRevenueCategory, PlatformRevenueSourceType };

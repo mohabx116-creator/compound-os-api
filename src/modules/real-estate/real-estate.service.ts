@@ -1,4 +1,4 @@
-import { PrismaClient, RealEstateStatus, RealEstateSubmissionStatus, Prisma, PlatformRevenueCategory, PlatformRevenueSourceType } from '@prisma/client';
+import { PrismaClient, RealEstateStatus, RealEstateSubmissionStatus, Prisma } from '@prisma/client';
 import crypto from 'crypto';
 import { AppError } from '../../common/errors/AppError.js';
 import { ErrorCodes } from '../../common/errors/error-codes.js';
@@ -541,17 +541,16 @@ export class RealEstateService {
       return;
     }
 
-    const unitRate = new Prisma.Decimal(1000);
+    const unitRateEgp = 1000;
 
     await PlatformRevenueService.recordRevenueEntry(tx, {
       compoundId: listing.compoundId,
-      sourceType: PlatformRevenueSourceType.REAL_ESTATE_LISTING,
+      sourceType: 'REAL_ESTATE_LISTING',
       sourceId: listing.id,
-      revenueCategory: PlatformRevenueCategory.SALE_APARTMENT_LISTING,
-      amount: unitRate,
-      unitRate,
-      quantity: new Prisma.Decimal(1),
-      currency: 'EGP',
+      revenueCategory: 'SALE_APARTMENT_LISTING',
+      amountEgp: unitRateEgp,
+      unitRateEgp,
+      quantity: 1,
       description: 'رسوم نشر إعلان بيع شقة',
       occurredAt: listing.publishedAt ?? new Date(),
       realEstateListingId: listing.id,
