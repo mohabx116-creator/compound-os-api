@@ -12,7 +12,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "node scripts/recover-failed-revenue-baseline-migration.cjs && prisma migrate deploy",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "export:rentals-backup": "tsx scripts/export-rentals-backup.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.14.0",
