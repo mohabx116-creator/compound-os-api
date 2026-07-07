@@ -162,3 +162,6 @@ Payments:
    - mobile layout
 9. Keep old Render service available until the new host is proven stable.
 
+### Full Platform Runbook
+
+- For the broader platform failover plan, see `docs/full-platform-failover-runbook.md`.

@@ -13,7 +13,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "node scripts/recover-failed-revenue-baseline-migration.cjs && prisma migrate deploy",
     "prisma:studio": "prisma studio",
-    "export:rentals-backup": "tsx scripts/export-rentals-backup.ts"
+    "export:rentals-backup": "tsx scripts/export-rentals-backup.ts",
+    "export:real-estate-backup": "tsx scripts/export-real-estate-backup.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.14.0",
