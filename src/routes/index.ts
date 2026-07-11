@@ -42,4 +42,8 @@ router.use('/admin/settings', requireAuth, requireAdminRole, adminSettingsRoutes
 router.use('/admin/real-estate', requireAuth, requireAdminRole, adminRealEstateRoutes);
 router.use('/admin/revenue', requireAuth, requirePlatformOwner, adminRevenueRoutes);
 
+// Mount Public Platform Stats
+import { publicStatsRoutes } from '../modules/public-stats/public-stats.routes.js';
+router.use('/public/platform-stats', publicStatsRoutes);
+
 export const apiRoutes = router;
