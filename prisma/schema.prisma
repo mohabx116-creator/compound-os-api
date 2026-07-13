@@ -147,6 +147,20 @@ enum PaymentProvider {
   PAYMOB
 }
 
+enum RatingFeedbackType {
+  SITE_EXPERIENCE
+  SERVICE
+  REAL_ESTATE
+  RENTAL
+}
+
+enum RatingFeedbackStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SPAM
+}
+
 model Compound {
   id         String   @id @default(uuid())
   name       String
@@ -172,7 +186,7 @@ model Compound {
   rentalReservations         RentalReservation[]
   rentalPayments             RentalPayment[]
   rentalLedgerEntries        RentalPlatformLedgerEntry[]
-  platformRevenueEntries      PlatformRevenueEntry[]
+  platformRevenueEntries     PlatformRevenueEntry[]
   rentalOwnerSubmissions     RentalOwnerSubmission[]
   rentalTenants              RentalTenant[]
   adminNotifications         AdminNotification[]
@@ -524,10 +538,10 @@ model RentalReservation {
   createdAt        DateTime                @default(now()) @map("created_at")
   updatedAt        DateTime                @updatedAt @map("updated_at")
 
-  payments      RentalPayment[]
-  ledgerEntries RentalPlatformLedgerEntry[]
+  payments               RentalPayment[]
+  ledgerEntries          RentalPlatformLedgerEntry[]
   platformRevenueEntries PlatformRevenueEntry[]
-  rentalTenant  RentalTenant?
+  rentalTenant           RentalTenant?
 
   @@index([listingId])
   @@index([compoundId])
@@ -564,7 +578,7 @@ model RentalPayment {
   createdAt             DateTime             @default(now()) @map("created_at")
   updatedAt             DateTime             @updatedAt @map("updated_at")
 
-  ledgerEntries RentalPlatformLedgerEntry[]
+  ledgerEntries          RentalPlatformLedgerEntry[]
   platformRevenueEntries PlatformRevenueEntry[]
 
   @@unique([provider, providerTransactionId])
@@ -604,29 +618,29 @@ model RentalPlatformLedgerEntry {
 }
 
 model PlatformRevenueEntry {
-  id                  String           @id @default(uuid())
-  compoundId          String           @map("compound_id")
-  compound            Compound         @relation(fields: [compoundId], references: [id], onDelete: Cascade)
-  sourceType          String           @map("source_type")
-  sourceId            String           @map("source_id")
-  entryKind           String           @default("CHARGE") @map("entry_kind")
-  reversalOfEntryId   String?          @unique @map("reversal_of_entry_id")
-  revenueCategory     String           @map("revenue_category")
-  listingId           String?          @map("listing_id")
-  listing             RentalListing?   @relation(fields: [listingId], references: [id], onDelete: SetNull)
-  realEstateListingId String?          @map("real_estate_listing_id")
+  id                  String             @id @default(uuid())
+  compoundId          String             @map("compound_id")
+  compound            Compound           @relation(fields: [compoundId], references: [id], onDelete: Cascade)
+  sourceType          String             @map("source_type")
+  sourceId            String             @map("source_id")
+  entryKind           String             @default("CHARGE") @map("entry_kind")
+  reversalOfEntryId   String?            @unique @map("reversal_of_entry_id")
+  revenueCategory     String             @map("revenue_category")
+  listingId           String?            @map("listing_id")
+  listing             RentalListing?     @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  realEstateListingId String?            @map("real_estate_listing_id")
   realEstateListing   RealEstateListing? @relation(fields: [realEstateListingId], references: [id], onDelete: SetNull)
-  reservationId       String?          @map("reservation_id")
+  reservationId       String?            @map("reservation_id")
   reservation         RentalReservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
-  paymentId           String?          @map("payment_id")
-  payment             RentalPayment?   @relation(fields: [paymentId], references: [id], onDelete: SetNull)
-  amountEgp           Int              @map("amount_egp")
-  unitRateEgp         Int              @map("unit_rate_egp")
+  paymentId           String?            @map("payment_id")
+  payment             RentalPayment?     @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  amountEgp           Int                @map("amount_egp")
+  unitRateEgp         Int                @map("unit_rate_egp")
   quantity            Int
   description         String
   metadata            Json?
-  occurredAt          DateTime         @default(now()) @map("occurred_at")
-  createdAt           DateTime         @default(now()) @map("created_at")
+  occurredAt          DateTime           @default(now()) @map("occurred_at")
+  createdAt           DateTime           @default(now()) @map("created_at")
 
   @@unique([sourceType, sourceId, entryKind])
   @@index([compoundId])
@@ -869,6 +883,31 @@ model AdminNotification {
   @@map("admin_notifications")
 }
 
+model RatingFeedback {
+  id                  String               @id @default(uuid())
+  type                RatingFeedbackType   @map("feedback_type")
+  rating              Int
+  comment             String?              @db.VarChar(1000)
+  sourcePage          String?              @map("source_page") @db.VarChar(255)
+  promptVersion       String               @default("site-rating-v1") @map("prompt_version") @db.VarChar(50)
+  clientInteractionMs Int?                 @map("client_interaction_ms")
+  ipHash              String?              @map("ip_hash") @db.VarChar(128)
+  visitorTokenHash    String?              @map("visitor_token_hash") @db.VarChar(128)
+  userAgentHash       String?              @map("user_agent_hash") @db.VarChar(128)
+  status              RatingFeedbackStatus @default(PENDING)
+  spamReason          String?              @map("spam_reason") @db.VarChar(255)
+  metadata            Json?
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+
+  @@index([type, status, createdAt])
+  @@index([status, createdAt])
+  @@index([ipHash, type, createdAt])
+  @@index([visitorTokenHash, type, createdAt])
+  @@index([createdAt])
+  @@map("rating_feedbacks")
+}
+
 // ─── Real Estate Sales Module ───────────────────────────────────────────────
 
 enum RealEstateStatus {
@@ -958,27 +997,27 @@ model RealEstateListing {
   internalNotes String? @map("internal_notes")
 
   // Apartment/Unit optional fields
-  bedrooms         Int?
-  bathrooms        Int?
-  floor            String?
-  balconies        Int?
-  receptionRooms   Int?                        @map("reception_rooms")
-  buildingAge      Int?                        @map("building_age")
-  buildingNumber   String?                     @map("building_number")
-  apartmentNumber  String?                     @map("apartment_number")
-  finishingType    RealEstateFinishing?        @map("finishing_type")
-  finishingStatus  RealEstateFinishingStatus?   @map("finishing_status")
-  furnishingStatus RealEstateFurnishingStatus? @map("furnishing_status")
-  deliveryStatus   String?                     @map("delivery_status")
-  hasElevator      Boolean?                    @map("has_elevator")
-  hasParking       Boolean?                    @map("has_parking")
-  view             String?
-  phase            RealEstatePhase?
-  ownershipProofType RealEstateOwnershipProofType? @map("ownership_proof_type")
+  bedrooms               Int?
+  bathrooms              Int?
+  floor                  String?
+  balconies              Int?
+  receptionRooms         Int?                          @map("reception_rooms")
+  buildingAge            Int?                          @map("building_age")
+  buildingNumber         String?                       @map("building_number")
+  apartmentNumber        String?                       @map("apartment_number")
+  finishingType          RealEstateFinishing?          @map("finishing_type")
+  finishingStatus        RealEstateFinishingStatus?    @map("finishing_status")
+  furnishingStatus       RealEstateFurnishingStatus?   @map("furnishing_status")
+  deliveryStatus         String?                       @map("delivery_status")
+  hasElevator            Boolean?                      @map("has_elevator")
+  hasParking             Boolean?                      @map("has_parking")
+  view                   String?
+  phase                  RealEstatePhase?
+  ownershipProofType     RealEstateOwnershipProofType? @map("ownership_proof_type")
   // Positive semantics: true means the financial obligation is settled.
-  areInstallmentsSettled Boolean?              @map("has_installments")
-  isDepositSettled       Boolean?              @map("has_deposit")
-  hasFinalContract Boolean?                    @map("has_final_contract")
+  areInstallmentsSettled Boolean?                      @map("has_installments")
+  isDepositSettled       Boolean?                      @map("has_deposit")
+  hasFinalContract       Boolean?                      @map("has_final_contract")
 
   // Land optional fields
   pricePerMeter      Decimal? @map("price_per_meter") @db.Decimal(12, 2)
@@ -994,8 +1033,8 @@ model RealEstateListing {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  images    RealEstateListingImage[]
-  inquiries RealEstateInquiry[]
+  images                 RealEstateListingImage[]
+  inquiries              RealEstateInquiry[]
   platformRevenueEntries PlatformRevenueEntry[]
 
   @@index([compoundId])
@@ -1022,49 +1061,49 @@ model RealEstateListingImage {
 }
 
 model RealEstateOwnerSubmission {
-  id                String         @id @default(uuid())
-  compoundId        String         @map("compound_id")
-  compound          Compound       @relation(fields: [compoundId], references: [id], onDelete: Cascade)
-  submitterName     String         @map("submitter_name")
-  submitterPhone    String         @map("submitter_phone")
-  submitterWhatsapp String?        @map("submitter_whatsapp")
-  submitterEmail    String?        @map("submitter_email")
+  id                String   @id @default(uuid())
+  compoundId        String   @map("compound_id")
+  compound          Compound @relation(fields: [compoundId], references: [id], onDelete: Cascade)
+  submitterName     String   @map("submitter_name")
+  submitterPhone    String   @map("submitter_phone")
+  submitterWhatsapp String?  @map("submitter_whatsapp")
+  submitterEmail    String?  @map("submitter_email")
   title             String
-  price             Decimal        @db.Decimal(12, 2)
-  areaSqm           Decimal        @map("area_sqm") @db.Decimal(10, 2)
+  price             Decimal  @db.Decimal(12, 2)
+  areaSqm           Decimal  @map("area_sqm") @db.Decimal(10, 2)
   description       String
   features          Json?
   amenities         Json?
 
   // Optional fields mixed
-  bedrooms           Int?
-  bathrooms          Int?
-  floor              String?
-  balconies          Int?
-  receptionRooms     Int?                        @map("reception_rooms")
-  buildingAge        Int?                        @map("building_age")
-  buildingNumber     String?                     @map("building_number")
-  apartmentNumber    String?                     @map("apartment_number")
-  finishingType      RealEstateFinishing?        @map("finishing_type")
-  finishingStatus    RealEstateFinishingStatus?  @map("finishing_status")
-  furnishingStatus   RealEstateFurnishingStatus? @map("furnishing_status")
-  hasElevator        Boolean?                    @map("has_elevator")
-  hasParking         Boolean?                    @map("has_parking")
-  phase              RealEstatePhase?
-  ownershipProofType RealEstateOwnershipProofType? @map("ownership_proof_type")
+  bedrooms               Int?
+  bathrooms              Int?
+  floor                  String?
+  balconies              Int?
+  receptionRooms         Int?                          @map("reception_rooms")
+  buildingAge            Int?                          @map("building_age")
+  buildingNumber         String?                       @map("building_number")
+  apartmentNumber        String?                       @map("apartment_number")
+  finishingType          RealEstateFinishing?          @map("finishing_type")
+  finishingStatus        RealEstateFinishingStatus?    @map("finishing_status")
+  furnishingStatus       RealEstateFurnishingStatus?   @map("furnishing_status")
+  hasElevator            Boolean?                      @map("has_elevator")
+  hasParking             Boolean?                      @map("has_parking")
+  phase                  RealEstatePhase?
+  ownershipProofType     RealEstateOwnershipProofType? @map("ownership_proof_type")
   // Positive semantics: true means the financial obligation is settled.
-  areInstallmentsSettled Boolean?               @map("has_installments")
-  isDepositSettled       Boolean?               @map("has_deposit")
-  hasFinalContract   Boolean?                    @map("has_final_contract")
-  pricePerMeter      Decimal?                    @map("price_per_meter") @db.Decimal(12, 2)
-  frontage           Decimal?                    @db.Decimal(10, 2)
-  depth              Decimal?                    @db.Decimal(10, 2)
-  streetWidth        Decimal?                    @map("street_width") @db.Decimal(10, 2)
-  landUse            String?                     @map("land_use")
-  utilitiesAvailable Boolean?                    @map("utilities_available")
-  cornerPlot         Boolean?                    @map("corner_plot")
-  isRegistered       Boolean?                    @map("is_registered")
-  hasBuildingPermit  Boolean?                    @map("has_building_permit")
+  areInstallmentsSettled Boolean?                      @map("has_installments")
+  isDepositSettled       Boolean?                      @map("has_deposit")
+  hasFinalContract       Boolean?                      @map("has_final_contract")
+  pricePerMeter          Decimal?                      @map("price_per_meter") @db.Decimal(12, 2)
+  frontage               Decimal?                      @db.Decimal(10, 2)
+  depth                  Decimal?                      @db.Decimal(10, 2)
+  streetWidth            Decimal?                      @map("street_width") @db.Decimal(10, 2)
+  landUse                String?                       @map("land_use")
+  utilitiesAvailable     Boolean?                      @map("utilities_available")
+  cornerPlot             Boolean?                      @map("corner_plot")
+  isRegistered           Boolean?                      @map("is_registered")
+  hasBuildingPermit      Boolean?                      @map("has_building_permit")
 
   status           RealEstateSubmissionStatus @default(PENDING)
   adminNotes       String?                    @map("admin_notes")
