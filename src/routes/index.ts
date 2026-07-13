@@ -10,6 +10,7 @@ import { serviceCategoryRoutes } from '../modules/service-categories/service-cat
 import { serviceProviderRoutes } from '../modules/service-providers/service-provider.routes.js';
 import { servicesRoutes } from '../modules/services/services.routes.js';
 import { rentalRoutes } from '../modules/rentals/rental.routes.js';
+import { ratingsRoutes } from '../modules/ratings/ratings.routes.js';
 import { adminNotificationRoutes } from '../modules/admin-notifications/admin-notification.routes.js';
 import { adminDashboardRoutes } from '../modules/admin-dashboard/admin-dashboard.routes.js';
 import { adminSettingsRoutes } from '../modules/admin-settings/admin-settings.routes.js';
@@ -35,6 +36,7 @@ router.use('/service-providers', serviceProviderRoutes);
 router.use('/services', servicesRoutes);
 router.use('/rentals', rentalRoutes);
 router.use('/real-estate', realEstateRoutes);
+router.use('/public/ratings', ratingsRoutes);
 
 router.use('/admin/notifications', requireAuth, requireAdminRole, adminNotificationRoutes);
 router.use('/admin/dashboard', requireAuth, requireAdminRole, adminDashboardRoutes);
