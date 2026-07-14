@@ -1442,13 +1442,11 @@ export class RentalService {
     let isPublished = listing.isPublished;
 
     if (availableBeds === 0) {
-      isPublished = false;
+      isPublished = true;
       if (totalBeds === 0) {
         status = RentalListingStatus.SUSPENDED;
-      } else if (rentedBeds === totalBeds) {
+      } else {
         status = RentalListingStatus.RENTED;
-      } else if (pendingBeds > 0) {
-        status = RentalListingStatus.RESERVED;
       }
     } else if (
       status === RentalListingStatus.RENTED ||
@@ -1945,7 +1943,7 @@ export class RentalService {
 
     if (
       !listing ||
-      listing.status !== RentalListingStatus.ACTIVE ||
+      (listing.status !== RentalListingStatus.ACTIVE && listing.status !== RentalListingStatus.RENTED) ||
       !listing.isPublished ||
       (listing.expiresAt !== null && listing.expiresAt <= now)
     ) {
@@ -3401,7 +3399,7 @@ export class RentalService {
       where: { id },
       data: {
         status: RentalListingStatus.RENTED,
-        isPublished: false,
+        isPublished: true,
         reservedUntil: null,
         rentedAt: new Date(),
       },
@@ -3586,7 +3584,7 @@ export class RentalService {
 
   private static buildPublicListingWhere(query: RentalListQuery, now: Date) {
     const where: Prisma.RentalListingWhereInput = {
-      status: RentalListingStatus.ACTIVE,
+      status: { in: [RentalListingStatus.ACTIVE, RentalListingStatus.RENTED] },
       isPublished: true,
       OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
     };
@@ -4602,19 +4600,6 @@ export class RentalService {
       );
     }
 
-    const isTargetPublicActivePublished =
-      status === RentalListingStatus.ACTIVE && isPublished === true;
-
-    if (isTargetPublicActivePublished) {
-      const availableBeds = totalBeds - pendingBeds - rentedBeds;
-      if (availableBeds <= 0) {
-        throw new AppError(
-          'Cannot publish or set status to active when available beds are 0 or less',
-          400,
-          ErrorCodes.BAD_REQUEST
-        );
-      }
-    }
   }
 
   public static computeBedCountsFromBeds(beds: Array<{ status: RentalBedStatus }>) {
@@ -4690,13 +4675,11 @@ export class RentalService {
     let isPublished = listing.isPublished;
 
     if (availableBeds === 0) {
-      isPublished = false;
+      isPublished = true;
       if (totalBeds === 0) {
         status = RentalListingStatus.SUSPENDED;
-      } else if (rentedBeds === totalBeds) {
+      } else {
         status = RentalListingStatus.RENTED;
-      } else if (pendingBeds > 0) {
-        status = RentalListingStatus.RESERVED;
       }
     } else if (
       status === RentalListingStatus.RENTED ||
