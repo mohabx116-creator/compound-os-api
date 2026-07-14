@@ -1,4 +1,4 @@
-﻿-- CreateEnum
+-- CreateEnum
 CREATE TYPE "RatingFeedbackType" AS ENUM ('SITE_EXPERIENCE', 'SERVICE', 'REAL_ESTATE', 'RENTAL');
 
 -- CreateEnum
