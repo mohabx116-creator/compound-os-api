@@ -3452,7 +3452,7 @@ export class RentalService {
         where: { id: reservation.listingId },
         data: {
           status: RentalListingStatus.RENTED,
-          isPublished: false,
+          isPublished: true,
           rentedAt: now,
           reservedUntil: null,
         },
