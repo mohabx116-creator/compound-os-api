@@ -1783,7 +1783,7 @@ export class RentalService {
         pendingBeds: true,
         rentedBeds: true,
       },
-      orderBy: [{ isFeatured: 'desc' }, { createdAt: 'desc' }],
+      orderBy: [{ status: 'asc' }, { isFeatured: 'desc' }, { createdAt: 'desc' }],
     });
     const hasNextPage = listings.length > pagination.take;
     const pageListings = hasNextPage ? listings.slice(0, pagination.take) : listings;
