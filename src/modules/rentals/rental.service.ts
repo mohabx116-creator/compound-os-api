@@ -2098,7 +2098,7 @@ export class RentalService {
           tenantName: input.tenantName,
           tenantPhone,
           tenantEmail: input.tenantEmail,
-          tenantNationalId: cleanText(input.tenantNationalId),
+          tenantNationalId: cleanText(input.tenantNationalId) ?? null,
           message: this.buildWhatsAppInquiryMessage(input, tenantPhone, listing),
           status,
         },
@@ -3744,7 +3744,7 @@ export class RentalService {
     },
   ) {
     const lines = [
-      'طلب تواصل واتساب للإيجار',
+      'طلب معاينة للوحدة',
       `اسم العميل: ${input.tenantName.trim()}`,
       `رقم الموبايل: ${tenantPhone}`,
     ];

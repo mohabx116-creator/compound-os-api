@@ -173,7 +173,10 @@ export const createRentalInquirySchema = z
     tenantName: z.string().trim().min(1, 'Tenant name is required').max(150),
     tenantPhone: tenantPhoneSchema,
     tenantEmail: optionalEmail,
-    tenantNationalId: z.string().trim().regex(/^[0-9]{14}$/, 'Tenant national id must be exactly 14 English digits').optional(),
+    tenantNationalId: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z.string().trim().regex(/^[0-9]{14}$/, 'Tenant national id must be exactly 14 English digits').optional(),
+    ),
     message: optionalText(2000),
     inquiryType: rentalInquiryTypeSchema.optional(),
   })
