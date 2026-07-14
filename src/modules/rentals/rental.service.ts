@@ -1941,9 +1941,15 @@ export class RentalService {
     });
     const now = new Date();
 
+    const publicVisibleStatuses: RentalListingStatus[] = [
+      RentalListingStatus.ACTIVE,
+      RentalListingStatus.RENTED,
+      RentalListingStatus.RESERVED,
+    ];
+
     if (
       !listing ||
-      (listing.status !== RentalListingStatus.ACTIVE && listing.status !== RentalListingStatus.RENTED) ||
+      !publicVisibleStatuses.includes(listing.status) ||
       !listing.isPublished ||
       (listing.expiresAt !== null && listing.expiresAt <= now)
     ) {
@@ -3583,8 +3589,16 @@ export class RentalService {
   }
 
   private static buildPublicListingWhere(query: RentalListQuery, now: Date) {
+    const publicVisibleStatuses: RentalListingStatus[] = [
+      RentalListingStatus.ACTIVE,
+      RentalListingStatus.RENTED,
+      RentalListingStatus.RESERVED,
+    ];
+
     const where: Prisma.RentalListingWhereInput = {
-      status: { in: [RentalListingStatus.ACTIVE, RentalListingStatus.RENTED] },
+      status: {
+        in: publicVisibleStatuses,
+      },
       isPublished: true,
       OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
     };
