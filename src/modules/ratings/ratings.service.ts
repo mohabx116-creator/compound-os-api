@@ -3,6 +3,7 @@ import { Prisma, RatingFeedbackStatus, RatingFeedbackType } from '@prisma/client
 import { Request } from 'express';
 import { AppError } from '../../common/errors/AppError.js';
 import { ErrorCodes } from '../../common/errors/error-codes.js';
+import { getClientIp } from '../../common/utils/request-ip.js';
 import { env } from '../../config/env.js';
 import { prisma } from '../../config/prisma.js';
 import type { PublicRatingSummary, RatingSummaryQuery, SubmitRatingInput } from './ratings.types.js';
@@ -40,15 +41,6 @@ function cleanComment(value?: string | null) {
   return trimmed ? trimmed : null;
 }
 
-function clientIp(req: Request) {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string' && forwarded.trim()) {
-    return forwarded.split(',')[0]?.trim() || req.ip || req.socket.remoteAddress || 'unknown';
-  }
-
-  return req.ip || req.socket.remoteAddress || 'unknown';
-}
-
 function hashValue(salt: string, value: string) {
   return crypto
     .createHash('sha256')
@@ -74,7 +66,7 @@ export class RatingsService {
 
     const ratingHashSalt = getRatingHashSalt();
     const now = new Date();
-    const ip = clientIp(req);
+    const ip = getClientIp(req);
     const ipHash = hashValue(ratingHashSalt, ip);
     const visitorToken = cleanString(input.visitorToken);
     const visitorTokenHash = visitorToken ? hashValue(ratingHashSalt, visitorToken) : null;

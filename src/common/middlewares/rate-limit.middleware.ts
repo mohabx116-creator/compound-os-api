@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
+import { getClientIp } from '../utils/request-ip.js';
 
 interface RateLimitOptions {
   windowMs: number;
@@ -13,19 +14,10 @@ interface RateLimitBucket {
 
 const buckets = new Map<string, RateLimitBucket>();
 
-function clientIp(req: Request) {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string' && forwarded.trim()) {
-    return forwarded.split(',')[0]?.trim() || req.ip || 'unknown';
-  }
-
-  return req.ip || req.socket.remoteAddress || 'unknown';
-}
-
 export function rateLimit(options: RateLimitOptions) {
   return (req: Request, res: Response, next: NextFunction) => {
     const now = Date.now();
-    const key = `${options.keyPrefix}:${clientIp(req)}`;
+    const key = `${options.keyPrefix}:${getClientIp(req)}`;
     const current = buckets.get(key);
 
     if (!current || current.resetAt <= now) {

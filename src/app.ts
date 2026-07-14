@@ -10,6 +10,9 @@ import { errorMiddleware } from './common/middlewares/error.middleware.js';
 
 const app = express();
 
+// Trust the first proxy hop so req.ip reflects the proxy-rewritten client IP.
+app.set('trust proxy', 1);
+
 // Set security HTTP headers
 app.use(helmet());
 
