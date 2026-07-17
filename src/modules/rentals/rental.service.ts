@@ -3367,17 +3367,32 @@ export class RentalService {
     );
 
     const updated = await prisma.$transaction(async (tx) => {
+      await tx.rentalBed.updateMany({
+        where: {
+          listingId: id,
+          status: {
+            in: [RentalBedStatus.RESERVED, RentalBedStatus.RENTED],
+          },
+        },
+        data: {
+          status: RentalBedStatus.AVAILABLE,
+          reservationId: null,
+          inquiryId: null,
+        },
+      });
+
       const updatedListing = await tx.rentalListing.update({
         where: { id },
         data: {
           status: RentalListingStatus.ACTIVE,
           isPublished: true,
+          rentedAt: null,
           reservedUntil: null,
+          pendingBeds: 0,
+          rentedBeds: 0,
         },
         include: adminListingInclude,
       });
-
-      await this.recordRentalListingRevenue(tx, updatedListing, updatedListing.publishedAt ?? new Date());
 
       return updatedListing;
     });
