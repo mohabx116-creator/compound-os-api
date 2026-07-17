@@ -24,8 +24,8 @@ import { prisma } from '../../config/prisma.js';
 import { env } from '../../config/env.js';
 import { PlatformRevenueService } from '../platform-revenue/platform-revenue.service.js';
 import {
-  addDays,
   RENTAL_POLICY,
+  calculateRentalListingExpiryDate,
 } from './rental-policy.js';
 import { withOptimizedRentalImages } from './rental-image-urls.js';
 import { AdminNotificationService } from '../admin-notifications/admin-notification.service.js';
@@ -3273,13 +3273,14 @@ export class RentalService {
     const now = new Date();
 
     const updated = await prisma.$transaction(async (tx) => {
+      const publishedAt = listing.publishedAt ?? now;
       const updatedListing = await tx.rentalListing.update({
         where: { id },
         data: {
           status: RentalListingStatus.ACTIVE,
           isPublished: true,
-          publishedAt: now,
-          expiresAt: addDays(now, RENTAL_POLICY.listingDurationDays),
+          publishedAt,
+          expiresAt: calculateRentalListingExpiryDate(publishedAt),
         },
         include: adminListingInclude,
       });
@@ -3591,7 +3592,6 @@ export class RentalService {
     const publicVisibleStatuses: RentalListingStatus[] = [
       RentalListingStatus.ACTIVE,
       RentalListingStatus.RENTED,
-      RentalListingStatus.RESERVED,
     ];
 
     const where: Prisma.RentalListingWhereInput = {

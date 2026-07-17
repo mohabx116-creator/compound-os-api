@@ -6,7 +6,6 @@ export const RENTAL_POLICY = {
   reservationHoldHours: 24,
   reservationPaymentLockMinutes: 10,
   platformCommissionRate: 10,
-  listingDurationDays: 30,
 } as const;
 
 export function addMinutes(date: Date, minutes: number): Date {
@@ -19,4 +18,10 @@ export function addHours(date: Date, hours: number): Date {
 
 export function addDays(date: Date, days: number): Date {
   return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
+}
+
+export function calculateRentalListingExpiryDate(adDate: Date): Date {
+  const expiryDate = new Date(adDate);
+  expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+  return expiryDate;
 }
