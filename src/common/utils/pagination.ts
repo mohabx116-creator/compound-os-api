@@ -13,6 +13,7 @@ export interface PaginationMeta {
   limit: number;
   totalCount: number;
   availableCount?: number;
+  rentedCount?: number;
   totalPages: number;
   hasNextPage: boolean;
   hasPreviousPage: boolean;
@@ -42,7 +43,8 @@ export function getPrismaPagination(params: PaginationParams): PrismaPagination 
 export function getPaginationMeta(
   params: PaginationParams,
   totalCount: number,
-  availableCount?: number
+  availableCount?: number,
+  rentedCount?: number
 ): PaginationMeta {
   const totalPages = Math.max(1, Math.ceil(totalCount / params.limit));
 
@@ -51,6 +53,7 @@ export function getPaginationMeta(
     limit: params.limit,
     totalCount,
     ...(availableCount !== undefined ? { availableCount } : {}),
+    ...(rentedCount !== undefined ? { rentedCount } : {}),
     totalPages,
     hasNextPage: params.page < totalPages,
     hasPreviousPage: params.page > 1,

@@ -613,6 +613,7 @@ interface PublicListingsCacheEntry {
 interface PublicListingCountCacheEntry {
   totalCount: number;
   availableCount: number;
+  rentedCount: number;
   savedAt: number;
   expiresAt: number;
 }
@@ -1750,22 +1751,32 @@ export class RentalService {
       ...where,
       status: RentalListingStatus.ACTIVE,
     };
+    const rentedWhere: Prisma.RentalListingWhereInput = {
+      ...where,
+      status: RentalListingStatus.RENTED,
+    };
     const pagination = getPrismaPagination(query);
     const cachedCount = publicListingCountCache.get(countCacheKey);
     const hasCachedExactCount = Boolean(cachedCount && cachedCount.expiresAt > nowMs);
-    const hasCachedAvailableCount = Boolean(cachedCount && cachedCount.expiresAt > nowMs);
+    const hasCachedStatusCounts = hasCachedExactCount;
     const shouldEagerCount = query.page > 1;
     const countPromise = shouldEagerCount && !hasCachedExactCount
       ? prisma.rentalListing.count({ where })
       : null;
-    const availableCountPromise = shouldEagerCount && !hasCachedAvailableCount
+    const availableCountPromise = shouldEagerCount && !hasCachedStatusCounts
       ? prisma.rentalListing.count({ where: availableWhere })
+      : null;
+    const rentedCountPromise = shouldEagerCount && !hasCachedStatusCounts
+      ? prisma.rentalListing.count({ where: rentedWhere })
       : null;
     if (countPromise) {
       void countPromise.catch(() => undefined);
     }
     if (availableCountPromise) {
       void availableCountPromise.catch(() => undefined);
+    }
+    if (rentedCountPromise) {
+      void rentedCountPromise.catch(() => undefined);
     }
     const queryStart = timing?.start();
     const prismaStart = timing?.start();
@@ -1817,43 +1828,56 @@ export class RentalService {
 
     const canDeriveExactCount =
       !hasNextPage && (query.page === 1 || pageListings.length > 0);
-    const canDeriveExactAvailableCount = !hasNextPage && query.page === 1;
+    const canDeriveExactStatusCounts = !hasNextPage && query.page === 1;
     let totalCount: number;
     let availableCount: number;
+    let rentedCount: number;
 
-    if (canDeriveExactCount && canDeriveExactAvailableCount) {
+    if (canDeriveExactCount && canDeriveExactStatusCounts) {
       totalCount = query.page === 1 ? pageListings.length : pagination.skip + pageListings.length;
       availableCount = mappedListings.filter((listing) => listing.status === RentalListingStatus.ACTIVE).length;
+      rentedCount = mappedListings.filter((listing) => listing.status === RentalListingStatus.RENTED).length;
       if (!hasCachedExactCount) {
         publicListingCountCache.set(countCacheKey, {
           totalCount,
           availableCount,
+          rentedCount,
           savedAt: Date.now(),
           expiresAt: Date.now() + PUBLIC_LISTING_COUNT_CACHE_TTL_MS,
         });
       }
-    } else if (hasCachedExactCount && hasCachedAvailableCount && cachedCount) {
+    } else if (hasCachedExactCount && cachedCount) {
       totalCount = cachedCount.totalCount;
       availableCount = cachedCount.availableCount;
+      rentedCount = cachedCount.rentedCount;
     } else {
       const needTotalCount = !canDeriveExactCount && !hasCachedExactCount;
-      const needAvailableCount = !canDeriveExactAvailableCount && !hasCachedAvailableCount;
+      const needStatusCounts = !canDeriveExactStatusCounts && !hasCachedStatusCounts;
 
-      if (needTotalCount && needAvailableCount) {
-        const [exactCount, exactAvailableCount] = await Promise.all([
+      if (needTotalCount && needStatusCounts) {
+        const [exactCount, exactAvailableCount, exactRentedCount] = await Promise.all([
           countPromise ?? prisma.rentalListing.count({ where }),
           availableCountPromise ?? prisma.rentalListing.count({ where: availableWhere }),
+          rentedCountPromise ?? prisma.rentalListing.count({ where: rentedWhere }),
         ]);
         totalCount = exactCount;
         availableCount = exactAvailableCount;
+        rentedCount = exactRentedCount;
       } else if (needTotalCount) {
         totalCount = countPromise
           ? await countPromise
           : await prisma.rentalListing.count({ where });
-        availableCount = hasCachedAvailableCount && cachedCount
+        availableCount = hasCachedStatusCounts && cachedCount
           ? cachedCount.availableCount
-          : await prisma.rentalListing.count({ where: availableWhere });
-      } else if (needAvailableCount) {
+          : availableCountPromise
+            ? await availableCountPromise
+            : await prisma.rentalListing.count({ where: availableWhere });
+        rentedCount = hasCachedStatusCounts && cachedCount
+          ? cachedCount.rentedCount
+          : rentedCountPromise
+            ? await rentedCountPromise
+            : await prisma.rentalListing.count({ where: rentedWhere });
+      } else if (needStatusCounts) {
         totalCount = hasCachedExactCount && cachedCount
           ? cachedCount.totalCount
           : query.page === 1
@@ -1862,21 +1886,28 @@ export class RentalService {
         availableCount = availableCountPromise
           ? await availableCountPromise
           : await prisma.rentalListing.count({ where: availableWhere });
+        rentedCount = rentedCountPromise
+          ? await rentedCountPromise
+          : await prisma.rentalListing.count({ where: rentedWhere });
       } else {
         totalCount = hasCachedExactCount && cachedCount
           ? cachedCount.totalCount
           : query.page === 1
             ? pageListings.length
             : pagination.skip + pageListings.length;
-        availableCount = hasCachedAvailableCount && cachedCount
+        availableCount = hasCachedStatusCounts && cachedCount
           ? cachedCount.availableCount
           : mappedListings.filter((listing) => listing.status === RentalListingStatus.ACTIVE).length;
+        rentedCount = hasCachedStatusCounts && cachedCount
+          ? cachedCount.rentedCount
+          : mappedListings.filter((listing) => listing.status === RentalListingStatus.RENTED).length;
       }
 
-      if (!hasCachedExactCount || !hasCachedAvailableCount) {
+      if (!hasCachedExactCount || !hasCachedStatusCounts) {
         publicListingCountCache.set(countCacheKey, {
           totalCount,
           availableCount,
+          rentedCount,
           savedAt: Date.now(),
           expiresAt: Date.now() + PUBLIC_LISTING_COUNT_CACHE_TTL_MS,
         });
@@ -1885,7 +1916,7 @@ export class RentalService {
 
     const result: PublicListingsResponse = {
       listings: mappedListings,
-      meta: getPaginationMeta(query, totalCount, availableCount),
+      meta: getPaginationMeta(query, totalCount, availableCount, rentedCount),
     };
 
     publicListingsCache.set(cacheKey, {
