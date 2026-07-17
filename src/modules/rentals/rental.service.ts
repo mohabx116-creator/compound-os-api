@@ -1783,7 +1783,7 @@ export class RentalService {
         pendingBeds: true,
         rentedBeds: true,
       },
-      orderBy: [{ status: 'asc' }, { isFeatured: 'desc' }, { createdAt: 'desc' }],
+      orderBy: [{ isFeatured: 'desc' }, { createdAt: 'desc' }],
     });
     const hasNextPage = listings.length > pagination.take;
     const pageListings = hasNextPage ? listings.slice(0, pagination.take) : listings;
@@ -1944,7 +1944,6 @@ export class RentalService {
     const publicVisibleStatuses: RentalListingStatus[] = [
       RentalListingStatus.ACTIVE,
       RentalListingStatus.RENTED,
-      RentalListingStatus.RESERVED,
     ];
 
     if (
