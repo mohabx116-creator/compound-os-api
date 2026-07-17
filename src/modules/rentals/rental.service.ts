@@ -1748,11 +1748,7 @@ export class RentalService {
     const where = this.buildPublicListingWhere(query, now);
     const availableWhere: Prisma.RentalListingWhereInput = {
       ...where,
-      beds: {
-        some: {
-          status: RentalBedStatus.AVAILABLE,
-        },
-      },
+      status: RentalListingStatus.ACTIVE,
     };
     const pagination = getPrismaPagination(query);
     const cachedCount = publicListingCountCache.get(countCacheKey);
@@ -1827,7 +1823,7 @@ export class RentalService {
 
     if (canDeriveExactCount && canDeriveExactAvailableCount) {
       totalCount = query.page === 1 ? pageListings.length : pagination.skip + pageListings.length;
-      availableCount = mappedListings.filter((listing) => (listing.availableBeds ?? 0) > 0).length;
+      availableCount = mappedListings.filter((listing) => listing.status === RentalListingStatus.ACTIVE).length;
       if (!hasCachedExactCount) {
         publicListingCountCache.set(countCacheKey, {
           totalCount,
@@ -1874,7 +1870,7 @@ export class RentalService {
             : pagination.skip + pageListings.length;
         availableCount = hasCachedAvailableCount && cachedCount
           ? cachedCount.availableCount
-          : mappedListings.filter((listing) => (listing.availableBeds ?? 0) > 0).length;
+          : mappedListings.filter((listing) => listing.status === RentalListingStatus.ACTIVE).length;
       }
 
       if (!hasCachedExactCount || !hasCachedAvailableCount) {
