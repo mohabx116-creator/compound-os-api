@@ -15,12 +15,11 @@ const LOCAL_DEVELOPMENT_ORIGINS = [
 function getAllowedOrigins() {
   const origins = new Set(env.CORS_ORIGINS);
 
-  // Always allow the public services web origin
-  origins.add('https://compound-os-services-web.vercel.app');
+  // Always allow the official public web origins
+  origins.add('https://dalilsubhi.com');
   origins.add('https://services-ds-core-91.dalilsubhi.com');
-  origins.add('https://dalilsubhi-realestate-web.vercel.app');
+  origins.add('https://rentals-ds-core-91.dalilsubhi.com');
   origins.add('https://realestate-ds-core-91.dalilsubhi.com');
-  origins.add('https://ds-ops-7x.dalilsubhi.com');
 
   if (env.NODE_ENV !== 'production') {
     for (const origin of LOCAL_DEVELOPMENT_ORIGINS) {

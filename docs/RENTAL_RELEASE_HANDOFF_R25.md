@@ -19,13 +19,13 @@
 
 | الخدمة | الرابط المعروف |
 |---|---|
-| Backend API | `https://compound-os-api.onrender.com/api/v1` |
-| الواجهة العامة للإيجارات | `https://sebahi-rental-web.vercel.app` |
-| نطاق الإيجارات العام | `https://rentals.dalilsubhi.com` |
-| لوحة الإدارة الداخلية | `https://admin.dalilsubhi.com` |
-| لوحة الإدارة على Vercel | `https://compound-os-admin.vercel.app` |
-| تطبيق السكان | `https://app.dalilsubhi.com` |
-| تطبيق السكان على Vercel | `https://compound-os-web.vercel.app` |
+| Backend API | `https://compound-os-api-replica.onrender.com/api/v1` |
+| الواجهة العامة للإيجارات | `https://rentals-ds-core-91.dalilsubhi.com/rentals` |
+| نطاق الإيجارات العام | `https://rentals-ds-core-91.dalilsubhi.com/rentals` |
+| لوحة الإدارة الداخلية | `داخلي فقط` |
+| لوحة الإدارة على Vercel | `داخلي فقط` |
+| تطبيق السكان | `https://dalilsubhi.com` |
+| تطبيق السكان على Vercel | `https://dalilsubhi.com` |
 
 ملاحظات:
 - روابط الإدارة داخلية ولا تُرسل للطلاب ولا تظهر في رسائل واتساب.

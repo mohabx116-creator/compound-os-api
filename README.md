@@ -18,8 +18,8 @@ Production-oriented Node.js/TypeScript backend for residential compound manageme
 - Render deployment guidance for production hosting.
 
 ## Connected Applications
-- Resident platform: https://compound-os-web.vercel.app/
-- Services platform: https://compound-os-services-web.vercel.app/
+- Resident platform: https://dalilsubhi.com/
+- Services platform: https://services-ds-core-91.dalilsubhi.com/services
 
 These frontend applications are integrated with the API.
 

@@ -68,11 +68,11 @@ A temporary diff (`REAL_ESTATE_MIGRATION_REVIEW.sql`) was generated comparing `m
 
 ## 13. Smoke Test Plan
 **Public Endpoints:**
-- `GET https://compound-os-api.onrender.com/api/v1/real-estate/listings`
-- `GET https://compound-os-api.onrender.com/api/v1/real-estate/listings?type=LAND`
-- `GET https://compound-os-api.onrender.com/api/v1/real-estate/listings/:slug`
-- `POST https://compound-os-api.onrender.com/api/v1/real-estate/owner-submissions`
-- `POST https://compound-os-api.onrender.com/api/v1/real-estate/inquiries`
+- `GET https://compound-os-api-replica.onrender.com/api/v1/real-estate/listings`
+- `GET https://compound-os-api-replica.onrender.com/api/v1/real-estate/listings?type=LAND`
+- `GET https://compound-os-api-replica.onrender.com/api/v1/real-estate/listings/:slug`
+- `POST https://compound-os-api-replica.onrender.com/api/v1/real-estate/owner-submissions`
+- `POST https://compound-os-api-replica.onrender.com/api/v1/real-estate/inquiries`
 
 **Admin Endpoints (Authenticated):**
 - `GET /api/v1/admin/real-estate/listings`
